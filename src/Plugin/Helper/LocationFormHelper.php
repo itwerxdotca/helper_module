@@ -6,7 +6,6 @@ namespace Drupal\helper_module\Plugin\Helper;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -21,26 +20,26 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
   description: new TranslatableMarkup('Manages provinces and cities dynamically for field_canadian_towns'),
   weight: 0,
 )]
-class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInterface {
+class LocationFormHelper extends HelperBase {
 
   /**
-   * The entity type manager service.
+   * The Entity Type Manager service.
    *
    * @var \Drupal\Core\Entity\EntityTypeManagerInterface
    */
   protected EntityTypeManagerInterface $entityTypeManager;
 
   /**
-   * Constructs a LocationFormHelper object.
+   * Constructs a new LocationFormHelper.
    *
    * @param array $configuration
-   *   A configuration array containing information about the plugin instance.
+   *   Plugin configuration.
    * @param string $plugin_id
-   *   The plugin_id for the plugin instance.
+   *   Plugin ID.
    * @param mixed $plugin_definition
-   *   The plugin implementation definition.
+   *   Plugin definition.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
-   *   The entity type manager service.
+   *   The Entity Type Manager service.
    */
   public function __construct(
     array $configuration,
@@ -55,7 +54,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition): static {
+  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
     return new static(
       $configuration,
       $plugin_id,
@@ -65,34 +64,34 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
   }
 
   /**
-   * Alters the form to provide a province dropdown and a city autocomplete.
+   * Alters the form to provide a province dropdown and city autocomplete.
    *
    * @param array $form
-   *   The form structure to alter.
+   *   The form array being altered.
    * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The current form state.
+   *   The form state.
    */
   public function alterListingForm(array &$form, FormStateInterface $form_state): void {
     if (isset($form['field_canadian_towns'])) {
-      // Add province dropdown to the form.
+      // Add the Province (parent-only) dropdown.
       $form['field_canadian_towns']['province'] = $this->buildProvinceDropdown();
 
-      // Add city autocomplete to the form.
+      // Add the City (child terms) autocomplete.
       $form['field_canadian_towns']['city'] = $this->buildCityAutocomplete();
 
-      // Attach JavaScript for AJAX.
+      // Attach JavaScript for AJAX behavior.
       $form['#attached']['library'][] = 'helper_module/location-autocomplete';
     }
   }
 
   /**
-   * Builds the province dropdown field.
+   * Builds the province dropdown field (parent terms only).
    *
    * @return array
    *   The province dropdown form element.
    */
   protected function buildProvinceDropdown(): array {
-    // Load all the parent terms (provinces) from the vocabulary.
+    // Query parent terms from the taxonomy.
     $parent_terms = $this->entityTypeManager
       ->getStorage('taxonomy_term')
       ->loadTree('canadian_towns', 0, 1, FALSE);
@@ -134,7 +133,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
   }
 
   /**
-   * AJAX callback to update the city autocomplete.
+   * AJAX callback to update city autocomplete based on province selection.
    *
    * @param array $form
    *   The altered form.
@@ -145,13 +144,14 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
    *   The updated city field.
    */
   public function updateCityAutocomplete(array &$form, FormStateInterface $form_state): array {
-    $province_id = $form_state->getValue(['field_canadian_towns', 'province'], 0);
+    $province_id = $form_state->getValue(['field_canadian_towns', 'province'], NULL);
 
     if ($province_id) {
+      // Enable the city field and allow autocomplete suggestions.
       $form['field_canadian_towns']['city']['#disabled'] = FALSE;
       $form['field_canadian_towns']['city']['#placeholder'] = $this->t('Start typing city name...');
       $form['field_canadian_towns']['city']['#attributes']['data-autocomplete-path'] =
-        "/helper-module/autocomplete/city/{$province_id}";
+        "/helper-module/autocomplete/city/$province_id";
     }
 
     return $form['field_canadian_towns']['city'];
