@@ -1,0 +1,8 @@
+location-autocomplete:
+  version: 1.x
+  js:
+    js/location-autocomplete.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupal.autocomplete
+    - core/once

@@ -1,0 +1,63 @@
+<?php
+
+/**
+ * @file
+ * Primary module hooks for Helper Module.
+ */
+
+declare(strict_types=1);
+
+use Drupal\Core\Form\FormStateInterface;
+
+/**
+ * Implements hook_help().
+ */
+function helper_module_help(string $route_name, $route_match) {
+  switch ($route_name) {
+    case 'help.page.helper_module':
+      $output = '<h2>' . t('About') . '</h2>';
+      $output .= '<p>' . t('Helper Module provides a pluggable architecture for site-specific customizations using the Drupal plugin system.') . '</p>';
+      $output .= '<h2>' . t('Creating Helper Plugins') . '</h2>';
+      $output .= '<p>' . t('To create a helper plugin, create a PHP class in the <code>src/Plugin/Helper</code> directory that extends <code>HelperBase</code> and uses the <code>#[Helper]</code> attribute.') . '</p>';
+      return $output;
+  }
+  return '';
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function helper_module_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  // Handle listing content type forms (both create and edit).
+  if ($form_id === 'node_listing_form' || $form_id === 'node_listing_edit_form') {
+    $helper_manager = \Drupal::service('plugin.manager.helper');
+
+    try {
+      $location_helper = $helper_manager->createInstance('location_form');
+      $location_helper->alterListingForm($form, $form_state);
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('helper_module')->error('Error loading listing location helper: @message', ['@message' => $e->getMessage()]);
+    }
+  }
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_presave() for node entities.
+ */
+function helper_module_node_presave(Drupal\Core\Entity\EntityInterface $node) {
+  // Only process listing nodes.
+  if ($node->bundle() !== 'listing') {
+    return;
+  }
+
+  $helper_manager = \Drupal::service('plugin.manager.helper');
+
+  try {
+    $location_helper = $helper_manager->createInstance('listing_location');
+    $location_helper->geocodeListing($node);
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('helper_module')->error('Error geocoding listing: @message', ['@message' => $e->getMessage()]);
+  }
+}

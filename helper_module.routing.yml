@@ -1,0 +1,8 @@
+helper_module.city_autocomplete:
+  path: '/helper-module/autocomplete/city/{province}'
+  defaults:
+    _controller: '\Drupal\helper_module\Controller\CityAutocompleteController::autocomplete'
+    _title: 'City Autocomplete'
+  requirements:
+    _permission: 'access content'
+    province: \d+
