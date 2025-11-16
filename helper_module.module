@@ -27,17 +27,18 @@ function helper_module_help(string $route_name, $route_match) {
 /**
  * Implements hook_form_alter().
  */
-function helper_module_form_alter(&$form, FormStateInterface $form_state, $form_id) {
-  // Handle listing content type forms (both create and edit).
+function helper_module_form_alter(&$form, \Drupal\Core\Form\FormStateInterface $form_state, $form_id) {
   if ($form_id === 'node_listing_form' || $form_id === 'node_listing_edit_form') {
+    // Load the LocationFormHelper plugin and apply form changes.
     $helper_manager = \Drupal::service('plugin.manager.helper');
-
     try {
       $location_helper = $helper_manager->createInstance('location_form');
       $location_helper->alterListingForm($form, $form_state);
     }
     catch (\Exception $e) {
-      \Drupal::logger('helper_module')->error('Error loading listing location helper: @message', ['@message' => $e->getMessage()]);
+      \Drupal::logger('helper_module')->error('Failed to load LocationFormHelper plugin: @message', [
+        '@message' => $e->getMessage(),
+      ]);
     }
   }
 }

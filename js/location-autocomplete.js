@@ -4,14 +4,14 @@
   Drupal.behaviors.locationAutocomplete = {
     attach: function (context, settings) {
       // Find province field - works for both create and edit forms.
-      const provinceSelects = once('location-province', 'select[name*="[field_province]"]', context);
+      const provinceSelects = once('location-province', '[data-drupal-selector="edit-field-canadian-towns-province"]', context);
 
-      provinceSelects.forEach(function(select) {
-        select.addEventListener('change', function(e) {
+      provinceSelects.forEach(function (select) {
+        select.addEventListener('change', function (e) {
           const provinceId = e.target.value;
 
           // Find the city autocomplete field.
-          const cityInput = document.querySelector('input[name*="[field_city][0][target_id]"]');
+          const cityInput = context.querySelector('[data-drupal-selector="edit-field-canadian-towns-city"]');
 
           if (!cityInput) {
             return;
@@ -47,25 +47,6 @@
             cityInput.placeholder = 'Select a province first';
           }
         });
-
-        // Initialize on page load if editing existing node.
-        const currentValue = select.value;
-        if (currentValue && currentValue !== '_none') {
-          const cityInput = document.querySelector('input[name*="[field_city][0][target_id]"]');
-          if (cityInput) {
-            const newPath = '/helper-module/autocomplete/city/' + currentValue;
-            cityInput.setAttribute('data-autocomplete-path', newPath);
-            cityInput.disabled = false;
-            cityInput.placeholder = 'Start typing city name...';
-          }
-        } else {
-          // Disable city field if no province selected.
-          const cityInput = document.querySelector('input[name*="[field_city][0][target_id]"]');
-          if (cityInput && !cityInput.value) {
-            cityInput.disabled = true;
-            cityInput.placeholder = 'Select a province first';
-          }
-        }
       });
     }
   };

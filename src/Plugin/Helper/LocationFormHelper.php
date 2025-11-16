@@ -24,7 +24,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInterface {
 
   /**
-   * The entity type manager.
+   * The entity type manager service.
    *
    * @var \Drupal\Core\Entity\EntityTypeManagerInterface
    */
@@ -46,7 +46,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     array $configuration,
     string $plugin_id,
     mixed $plugin_definition,
-    EntityTypeManagerInterface $entity_type_manager,
+    EntityTypeManagerInterface $entity_type_manager
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->entityTypeManager = $entity_type_manager;
@@ -55,33 +55,32 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
-      return new static(
-          $configuration,
-          $plugin_id,
-          $plugin_definition,
-          $container->get('entity_type.manager')
-      );
+  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition): static {
+    return new static(
+      $configuration,
+      $plugin_id,
+      $plugin_definition,
+      $container->get('entity_type.manager')
+    );
   }
 
   /**
-   * Alters the form to provide a province dropdown and city autocomplete.
+   * Alters the form to provide a province dropdown and a city autocomplete.
    *
    * @param array $form
-   *   The form array being altered.
+   *   The form structure to alter.
    * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The form state object.
+   *   The current form state.
    */
   public function alterListingForm(array &$form, FormStateInterface $form_state): void {
-    // Ensure the field exists before altering.
     if (isset($form['field_canadian_towns'])) {
-      // Province dropdown (parent terms only).
+      // Add province dropdown to the form.
       $form['field_canadian_towns']['province'] = $this->buildProvinceDropdown();
 
-      // City autocomplete (child terms filtered by province).
+      // Add city autocomplete to the form.
       $form['field_canadian_towns']['city'] = $this->buildCityAutocomplete();
 
-      // Attach custom JavaScript for dynamic updates.
+      // Attach JavaScript for AJAX.
       $form['#attached']['library'][] = 'helper_module/location-autocomplete';
     }
   }
@@ -90,10 +89,10 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
    * Builds the province dropdown field.
    *
    * @return array
-   *   The form element array for the province dropdown.
+   *   The province dropdown form element.
    */
   protected function buildProvinceDropdown(): array {
-    // Fetch top-level terms (provinces) only.
+    // Load all the parent terms (provinces) from the vocabulary.
     $parent_terms = $this->entityTypeManager
       ->getStorage('taxonomy_term')
       ->loadTree('canadian_towns', 0, 1, FALSE);
@@ -121,13 +120,13 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
    * Builds the city autocomplete field.
    *
    * @return array
-   *   The form element array for the city autocomplete field.
+   *   The city autocomplete form element.
    */
   protected function buildCityAutocomplete(): array {
     return [
       '#type' => 'textfield',
       '#title' => $this->t('City'),
-      '#prefix' => "<div id='field-canadian-towns-city-wrapper'>",
+      '#prefix' => '<div id="field-canadian-towns-city-wrapper">',
       '#suffix' => '</div>',
       '#disabled' => TRUE,
       '#placeholder' => $this->t('Select a province first'),
@@ -135,18 +134,17 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
   }
 
   /**
-   * AJAX callback to update the city autocomplete for the selected province.
+   * AJAX callback to update the city autocomplete.
    *
    * @param array $form
-   *   The form array being altered.
+   *   The altered form.
    * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The form state object.
+   *   The form state.
    *
    * @return array
-   *   The updated city field form element.
+   *   The updated city field.
    */
   public function updateCityAutocomplete(array &$form, FormStateInterface $form_state): array {
-    // Fetch the selected province.
     $province_id = $form_state->getValue(['field_canadian_towns', 'province'], 0);
 
     if ($province_id) {
