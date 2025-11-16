@@ -1,0 +1,4 @@
+services:
+  plugin.manager.helper:
+    class: Drupal\helper_module\Plugin\Helper\HelperManager
+    parent: default_plugin_manager
