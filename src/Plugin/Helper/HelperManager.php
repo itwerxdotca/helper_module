@@ -34,11 +34,11 @@ class HelperManager extends DefaultPluginManager {
     ModuleHandlerInterface $module_handler,
   ) {
     parent::__construct(
-      subdir: 'Plugin/Helper',
-      namespaces: $namespaces,
-      module_handler: $module_handler,
-      plugin_interface: HelperInterface::class,
-      attribute_class: \Drupal\helper_module\Attribute\Helper::class,
+      'Plugin/Helper',
+      $namespaces,
+      $module_handler,
+      HelperInterface::class,
+      \Drupal\helper_module\Attribute\Helper::class,
     );
 
     $this->alterInfo('helper_info');
