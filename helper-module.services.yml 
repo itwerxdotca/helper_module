@@ -1,0 +1,23 @@
+<?php
+
+/**
+ * @file
+ * Primary module hooks for Helper Module.
+ */
+
+declare(strict_types=1);
+
+/**
+ * Implements hook_help().
+ */
+function helper_module_help(string $route_name, $route_match) {
+  switch ($route_name) {
+    case 'help.page.helper_module':
+      $output = '<h2>' . t('About') . '</h2>';
+      $output .= '<p>' . t('Helper Module provides a pluggable architecture for site-specific customizations using the Drupal plugin system.') . '</p>';
+      $output .= '<h2>' . t('Creating Helper Plugins') . '</h2>';
+      $output .= '<p>' . t('To create a helper plugin, create a PHP class in the <code>src/Plugin/Helper</code> directory that extends <code>HelperBase</code> and uses the <code>#[Helper]</code> attribute.') . '</p>';
+      return $output;
+  }
+  return '';
+}

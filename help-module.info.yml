@@ -1,0 +1,6 @@
+name: Helper Module
+type: module
+description: 'A pluggable helper module for site-specific customizations using Drupal 11 plugin system.'
+package: Custom
+core_version_requirement: ^11
+dependencies: []
