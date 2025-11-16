@@ -8,20 +8,17 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Drupal\node\NodeInterface;
-use Drupal\helper_module\Attribute\Helper;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Provides location handling for listing content type.
+ * Provides location handling for `field_canadian_towns`.
  *
- * Handles province dropdown, city autocomplete, and geocoding
- * for the listing content type.
+ * Handles parent (`province`) dropdown and child (`city`) autocomplete dynamically.
  */
 #[Helper(
   id: 'location_form',
-  label: new TranslatableMarkup('Listing Location Helper'),
-  description: new TranslatableMarkup('Manages province/city selection and geocoding for listings'),
+  label: new TranslatableMarkup('Canadian Towns Location Helper'),
+  description: new TranslatableMarkup('Manages provinces and cities dynamically for field_canadian_towns'),
   weight: 0,
 )]
 class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInterface {
@@ -43,7 +40,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
    * @param mixed $plugin_definition
    *   The plugin implementation definition.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
-   *   The entity type manager.
+   *   The entity type manager service.
    */
   public function __construct(
     array $configuration,
@@ -58,204 +55,107 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition): static {
-    return new static(
-      $configuration,
-      $plugin_id,
-      $plugin_definition,
-      $container->get('entity_type.manager')
-    );
+  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
+      return new static(
+          $configuration,
+          $plugin_id,
+          $plugin_definition,
+          $container->get('entity_type.manager')
+      );
   }
 
   /**
-   * Alters the listing form.
+   * Alters the form to provide a province dropdown and city autocomplete.
    *
    * @param array $form
-   *   The form array.
+   *   The form array being altered.
    * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The form state.
+   *   The form state object.
    */
   public function alterListingForm(array &$form, FormStateInterface $form_state): void {
-    // Convert province to select dropdown (parent terms only).
-    if (isset($form['field_province'])) {
-      $this->setupProvinceField($form, $form_state);
-    }
+    // Ensure the field exists before altering.
+    if (isset($form['field_canadian_towns'])) {
+      // Province dropdown (parent terms only).
+      $form['field_canadian_towns']['province'] = $this->buildProvinceDropdown();
 
-    // Set up city field with custom autocomplete.
-    if (isset($form['field_city'])) {
-      $this->setupCityField($form, $form_state);
-    }
+      // City autocomplete (child terms filtered by province).
+      $form['field_canadian_towns']['city'] = $this->buildCityAutocomplete();
 
-    // Attach JavaScript library.
-    $form['#attached']['library'][] = 'helper_module/location-autocomplete';
+      // Attach custom JavaScript for dynamic updates.
+      $form['#attached']['library'][] = 'helper_module/location-autocomplete';
+    }
   }
 
   /**
-   * Sets up the province field as a dropdown.
+   * Builds the province dropdown field.
    *
-   * @param array $form
-   *   The form array.
-   * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The form state.
+   * @return array
+   *   The form element array for the province dropdown.
    */
-protected function setupProvinceField(array &$form, FormStateInterface $form_state): void {
-     // DEBUG: Load ALL terms first to see structure
-     $all_terms = $this->entityTypeManager
-       ->getStorage('taxonomy_term')
-       ->loadTree('canadian_locations', 0, NULL, FALSE);
+  protected function buildProvinceDropdown(): array {
+    // Fetch top-level terms (provinces) only.
+    $parent_terms = $this->entityTypeManager
+      ->getStorage('taxonomy_term')
+      ->loadTree('canadian_towns', 0, 1, FALSE);
 
-     \Drupal::logger('helper_module')->notice('Total terms: @total', [
-       '@total' => count($all_terms)
-     ]);
-
-     // Check first few terms
-     foreach (array_slice($all_terms, 0, 5) as $term) {
-       \Drupal::logger('helper_module')->notice('Term: @name (ID: @id, Parent: @parent, Depth: @depth)', [
-         '@name' => $term->name,
-         '@id' => $term->tid,
-         '@parent' => implode(',', $term->parents),
-         '@depth' => $term->depth,
-       ]);
-     }
-   }  /**
-   * Sets up the city field with dynamic autocomplete.
-   *
-   * @param array $form
-   *   The form array.
-   * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The form state.
-   */
-  protected function setupCityField(array &$form, FormStateInterface $form_state): void {
-    // Get current province value if editing.
-    $province_id = NULL;
-    $entity = $form_state->getFormObject()->getEntity();
-    if ($entity->id() && !$entity->get('field_province')->isEmpty()) {
-      $province_id = $entity->get('field_province')->target_id;
+    $options = [];
+    foreach ($parent_terms as $term) {
+      $options[$term->tid] = $term->name;
     }
+
+    return [
+      '#type' => 'select',
+      '#title' => $this->t('Province'),
+      '#options' => $options,
+      '#empty_option' => $this->t('-- Select a Province --'),
+      '#required' => TRUE,
+      '#ajax' => [
+        'callback' => '::updateCityAutocomplete',
+        'wrapper' => 'field-canadian-towns-city-wrapper',
+        'event' => 'change',
+      ],
+    ];
+  }
+
+  /**
+   * Builds the city autocomplete field.
+   *
+   * @return array
+   *   The form element array for the city autocomplete field.
+   */
+  protected function buildCityAutocomplete(): array {
+    return [
+      '#type' => 'textfield',
+      '#title' => $this->t('City'),
+      '#prefix' => "<div id='field-canadian-towns-city-wrapper'>",
+      '#suffix' => '</div>',
+      '#disabled' => TRUE,
+      '#placeholder' => $this->t('Select a province first'),
+    ];
+  }
+
+  /**
+   * AJAX callback to update the city autocomplete for the selected province.
+   *
+   * @param array $form
+   *   The form array being altered.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state object.
+   *
+   * @return array
+   *   The updated city field form element.
+   */
+  public function updateCityAutocomplete(array &$form, FormStateInterface $form_state): array {
+    // Fetch the selected province.
+    $province_id = $form_state->getValue(['field_canadian_towns', 'province'], 0);
 
     if ($province_id) {
-      // Set autocomplete path with province parameter.
-      $form['field_city']['widget'][0]['target_id']['#autocomplete_route_name'] = 'helper_module.city_autocomplete';
-      $form['field_city']['widget'][0]['target_id']['#autocomplete_route_parameters'] = ['province' => $province_id];
+      $form['field_canadian_towns']['city']['#disabled'] = FALSE;
+      $form['field_canadian_towns']['city']['#placeholder'] = $this->t('Start typing city name...');
+      $form['field_canadian_towns']['city']['#attributes']['data-autocomplete-path'] =
+        "/helper-module/autocomplete/city/{$province_id}";
     }
-    else {
-      // Disable city field until province is selected.
-      $form['field_city']['widget'][0]['target_id']['#disabled'] = TRUE;
-      $form['field_city']['widget'][0]['target_id']['#placeholder'] = $this->t('Select a province first');
-    }
+
+    return $form['field_canadian_towns']['city'];
   }
-
-  /**
-   * Geocodes and saves location data for a listing node.
-   *
-   * @param \Drupal\node\NodeInterface $node
-   *   The listing node being saved.
-   */
-  public function geocodeListing(NodeInterface $node): void {
-    // Only process listing nodes.
-    if ($node->bundle() !== 'listing') {
-      return;
-    }
-
-    // Build complete address string from fields.
-    $address_parts = [];
-
-    // Add street address if present.
-    if (!$node->get('field_street_address')->isEmpty()) {
-      $address_field = $node->get('field_street_address')->first();
-      if ($address_field) {
-        $address_parts[] = $address_field->get('address_line1')->getValue();
-        if ($address_field->get('address_line2')->getValue()) {
-          $address_parts[] = $address_field->get('address_line2')->getValue();
-        }
-      }
-    }
-
-    // Add city name.
-    if (!$node->get('field_city')->isEmpty()) {
-      $city = $node->get('field_city')->entity;
-      if ($city) {
-        $address_parts[] = $city->getName();
-      }
-    }
-
-    // Add province name.
-    if (!$node->get('field_province')->isEmpty()) {
-      $province = $node->get('field_province')->entity;
-      if ($province) {
-        $address_parts[] = $province->getName();
-      }
-    }
-
-    // Add country.
-    $address_parts[] = 'Canada';
-
-    // Build full address string.
-    $full_address = implode(', ', array_filter($address_parts));
-
-    // Skip if no address to geocode.
-    if (empty($full_address)) {
-      return;
-    }
-
-    // Geocode using Geolocation module.
-    try {
-      $geocoder_manager = \Drupal::service('plugin.manager.geolocation.geocoder');
-
-      // Get the first available geocoder plugin (configured in Geolocation settings).
-      $geocoder_definitions = $geocoder_manager->getDefinitions();
-
-      if (empty($geocoder_definitions)) {
-        \Drupal::logger('helper_module')->warning('No geocoder plugins available for listing @id', [
-          '@id' => $node->id(),
-        ]);
-        return;
-      }
-
-      // Try each available geocoder.
-      foreach ($geocoder_definitions as $plugin_id => $definition) {
-        try {
-          $geocoder = $geocoder_manager->createInstance($plugin_id);
-
-          $result = $geocoder->geocode($full_address);
-
-          if (!empty($result['location'])) {
-            $latitude = $result['location']['lat'];
-            $longitude = $result['location']['lng'];
-
-            // Save to geolocation field.
-            $node->set('field_geolocation', [
-              'lat' => $latitude,
-              'lng' => $longitude,
-            ]);
-
-            \Drupal::logger('helper_module')->info('Geocoded listing @id using @plugin: @address', [
-              '@id' => $node->id(),
-              '@plugin' => $plugin_id,
-              '@address' => $full_address,
-            ]);
-
-            // Success - exit loop.
-            return;
-          }
-        }
-        catch (\Exception $e) {
-          // Try next geocoder.
-          continue;
-        }
-      }
-
-      \Drupal::logger('helper_module')->warning('Could not geocode listing @id: @address', [
-        '@id' => $node->id(),
-        '@address' => $full_address,
-      ]);
-    }
-    catch (\Exception $e) {
-      \Drupal::logger('helper_module')->error('Geocoding failed for listing @id: @message', [
-        '@id' => $node->id(),
-        '@message' => $e->getMessage(),
-      ]);
-    }
-  }
-
 }
