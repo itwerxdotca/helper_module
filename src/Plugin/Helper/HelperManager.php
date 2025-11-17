@@ -13,58 +13,56 @@ use Drupal\Core\Plugin\DefaultPluginManager;
  *
  * @see \Drupal\helper_module\Plugin\Helper\HelperInterface
  * @see \Drupal\helper_module\Attribute\Helper
- * @see plugin_api
  */
 class HelperManager extends DefaultPluginManager {
 
-  /**
-   * Constructs a HelperManager object.
-   *
-   * @param \Traversable $namespaces
-   *   An object that implements \Traversable which contains the root paths
-   *   keyed by the corresponding namespace to look for plugin implementations.
-   * @param \Drupal\Core\Cache\CacheBackendInterface $cache_backend
-   *   Cache backend instance to use.
-   * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
-   *   The module handler to invoke the alter hook with.
-   */
-  public function __construct(
-    \Traversable $namespaces,
-    CacheBackendInterface $cache_backend,
-    ModuleHandlerInterface $module_handler,
-  ) {
-    parent::__construct(
-      'Plugin/Helper',
-      $namespaces,
-      $module_handler,
-      HelperInterface::class,
-      \Drupal\helper_module\Attribute\Helper::class,
-    );
+    /**
+     * Constructs a HelperManager object.
+     *
+     * @param \Traversable $namespaces
+     *   Root paths keyed by namespace to look for plugins.
+     * @param \Drupal\Core\Cache\CacheBackendInterface $cache_backend
+     *   Cache backend to use.
+     * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
+     *   The module handler to invoke alter hooks.
+     */
+    public function __construct(
+        \Traversable $namespaces,
+        CacheBackendInterface $cache_backend,
+        ModuleHandlerInterface $module_handler
+    ) {
+        parent::__construct(
+            'Plugin/Helper',
+            $namespaces,
+            $module_handler,
+            HelperInterface::class,
+            \Drupal\helper_module\Attribute\Helper::class
+        );
 
-    $this->alterInfo('helper_info');
-    $this->setCacheBackend($cache_backend, 'helper_plugins');
-  }
-
-  /**
-   * Gets all enabled helper plugins sorted by weight.
-   *
-   * @return \Drupal\helper_module\Plugin\Helper\HelperInterface[]
-   *   An array of enabled helper plugin instances, keyed by plugin ID.
-   */
-  public function getEnabledHelpers(): array {
-    $helpers = [];
-    foreach ($this->getDefinitions() as $plugin_id => $definition) {
-      if ($definition['enabled'] ?? TRUE) {
-        $helpers[$plugin_id] = $this->createInstance($plugin_id);
-      }
+        // Allow plugins to be altered.
+        $this->alterInfo('helper_info');
+        $this->setCacheBackend($cache_backend, 'helper_plugins');
     }
 
-    // Sort by weight.
-    uasort($helpers, function (HelperInterface $a, HelperInterface $b) {
-      return $a->getWeight() <=> $b->getWeight();
-    });
+    /**
+     * Ensure discovery outputs information for debugging.
+     *
+     * @return array
+     *   Plugin definitions sorted by weight.
+     */
+    public function getDefinitions(): array {
+        $definitions = parent::getDefinitions();
 
-    return $helpers;
-  }
+        \Drupal::logger('helper_module')->notice('Discovered plugin definitions: @plugins', [
+            '@plugins' => print_r($definitions, TRUE),
+        ]);
 
+        if (empty($definitions)) {
+            // Explicit logging and interruption to detect empty discovery.
+            \Drupal::logger('helper_module')->error('No plugins were discovered. Verify discovery paths and `#[Helper]` attribute parsing.');
+            throw new \RuntimeException('Empty plugin discovery in HelperManager.');
+        }
+
+        return $definitions;
+    }
 }

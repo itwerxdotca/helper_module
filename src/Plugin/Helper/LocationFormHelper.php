@@ -97,6 +97,15 @@ class LocationFormHelper extends HelperBase {
       ->loadTree('canadian_towns', 0, 1, FALSE);
 
     $options = [];
+
+    // Handle case where no parent terms exist.
+    if (empty($parent_terms)) {
+      return [
+        '#type' => 'markup',
+        '#markup' => '<p>' . $this->t('No provinces available.') . '</p>',
+      ];
+    }
+
     foreach ($parent_terms as $term) {
       $options[$term->tid] = $term->name;
     }
@@ -152,6 +161,11 @@ class LocationFormHelper extends HelperBase {
       $form['field_canadian_towns']['city']['#placeholder'] = $this->t('Start typing city name...');
       $form['field_canadian_towns']['city']['#attributes']['data-autocomplete-path'] =
         "/helper-module/autocomplete/city/$province_id";
+    } else {
+      // Disable the city field if no province is selected.
+      $form['field_canadian_towns']['city']['#disabled'] = TRUE;
+      $form['field_canadian_towns']['city']['#placeholder'] = $this->t('Select a province first.');
+      $form['field_canadian_towns']['city']['#attributes']['data-autocomplete-path'] = '';
     }
 
     return $form['field_canadian_towns']['city'];
