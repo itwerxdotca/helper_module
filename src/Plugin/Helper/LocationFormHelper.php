@@ -125,7 +125,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     $city_field = [
       '#type' => 'textfield',
       '#title' => $this->t('City'),
-      '#default_value' => $current_value ? $this->getTermName($current_value) . ' (' . $current_value . ')' : '',
+      '#default_value' => $current_value ? $this->getTermName((int) $current_value) . ' (' . $current_value . ')' : '',
       '#disabled' => empty($current_parent),
       '#placeholder' => empty($current_parent) ? $this->t('Select a province first') : $this->t('Start typing city name...'),
       '#attributes' => [
@@ -256,11 +256,22 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       }
     }
 
+    // Add postal code if available.
+    if (!$node->get('field_listing_address')->isEmpty()) {
+      $address_field = $node->get('field_listing_address')->first();
+      if ($address_field && $address_field->postal_code) {
+        $address_parts[] = $address_field->postal_code;
+      }
+    }
+
     $address_parts[] = 'Canada';
 
     $full_address = implode(', ', array_filter($address_parts));
 
     if (empty($full_address)) {
+      \Drupal::logger('helper_module')->warning('No address data available for listing @id', [
+        '@id' => $node->id(),
+      ]);
       return;
     }
 
@@ -270,6 +281,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       $geocoder_definitions = $geocoder_manager->getDefinitions();
 
       if (empty($geocoder_definitions)) {
+        \Drupal::logger('helper_module')->warning('No geocoder plugins available');
         return;
       }
 
@@ -283,16 +295,34 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
               'lat' => $result['location']['lat'],
               'lng' => $result['location']['lng'],
             ]);
+
+            \Drupal::logger('helper_module')->info('Geocoded listing @id: @address -> @lat, @lng', [
+              '@id' => $node->id(),
+              '@address' => $full_address,
+              '@lat' => $result['location']['lat'],
+              '@lng' => $result['location']['lng'],
+            ]);
             return;
           }
         }
         catch (\Exception $e) {
+          \Drupal::logger('helper_module')->debug('Geocoder @plugin failed: @message', [
+            '@plugin' => $plugin_id,
+            '@message' => $e->getMessage(),
+          ]);
           continue;
         }
       }
+
+      // If we get here, no geocoder succeeded.
+      \Drupal::logger('helper_module')->warning('Failed to geocode address for listing @id: @address', [
+        '@id' => $node->id(),
+        '@address' => $full_address,
+      ]);
     }
     catch (\Exception $e) {
-      \Drupal::logger('helper_module')->error('Geocoding failed: @message', [
+      \Drupal::logger('helper_module')->error('Geocoding failed for listing @id: @message', [
+        '@id' => $node->id(),
         '@message' => $e->getMessage(),
       ]);
     }

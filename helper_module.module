@@ -63,8 +63,12 @@ function helper_module_node_presave(Drupal\Core\Entity\EntityInterface $node) {
   $helper_manager = \Drupal::service('plugin.manager.helper');
 
   try {
-    $location_helper = $helper_manager->createInstance('listing_location');
-    $location_helper->geocodeListing($node);
+    // Use the correct plugin ID: 'location_form' instead of 'listing_location'.
+    $location_helper = $helper_manager->createInstance('location_form');
+
+    if (method_exists($location_helper, 'geocodeListing')) {
+      $location_helper->geocodeListing($node);
+    }
   }
   catch (\Exception $e) {
     \Drupal::logger('helper_module')->error('Error geocoding listing: @message', ['@message' => $e->getMessage()]);
