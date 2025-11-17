@@ -60,82 +60,112 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
   /**
    * Alters the listing form.
    */
-public function alterListingForm(array &$form, FormStateInterface $form_state): void {
-     if (!isset($form['field_canadian_towns'])) {
-       return;
-     }
+  public function alterListingForm(array &$form, FormStateInterface $form_state): void {
+    if (!isset($form['field_canadian_towns'])) {
+      return;
+    }
 
-     // Get current value if editing.
-     $current_value = NULL;
-     $current_parent = NULL;
-     $entity = $form_state->getFormObject()->getEntity();
+    // Get current value if editing.
+    $current_value = NULL;
+    $current_parent = NULL;
+    $entity = $form_state->getFormObject()->getEntity();
 
-     if ($entity->id() && !$entity->get('field_canadian_towns')->isEmpty()) {
-       $current_value = $entity->get('field_canadian_towns')->target_id;
-       $term = $this->entityTypeManager->getStorage('taxonomy_term')->load($current_value);
-       if ($term) {
-         $parents = $this->entityTypeManager->getStorage('taxonomy_term')->loadParents($current_value);
-         if (!empty($parents)) {
-           $current_parent = reset($parents)->id();
-         }
-         else {
-           $current_parent = $current_value;
-           $current_value = NULL;
-         }
-       }
-     }
+    if ($entity->id() && !$entity->get('field_canadian_towns')->isEmpty()) {
+      $current_value = $entity->get('field_canadian_towns')->target_id;
+      $term = $this->entityTypeManager->getStorage('taxonomy_term')->load($current_value);
+      if ($term) {
+        $parents = $this->entityTypeManager->getStorage('taxonomy_term')->loadParents($current_value);
+        if (!empty($parents)) {
+          $current_parent = reset($parents)->id();
+        }
+        else {
+          $current_parent = $current_value;
+          $current_value = NULL;
+        }
+      }
+    }
 
-     // Create inline container for location fields
-     $form['location_wrapper'] = [
-       '#type' => 'container',
-       '#weight' => $form['field_canadian_towns']['#weight'] ?? 0,
-       '#attributes' => [
-         'class' => ['location-fields-inline'],
-         'style' => 'display: flex; gap: 1rem; flex-wrap: wrap;',
-       ],
-     ];
+    // Check if province was changed via AJAX - if so, clear city value.
+    $selected_province = $form_state->getValue('field_canadian_towns_province');
+    if ($selected_province !== NULL) {
+      // Province changed via AJAX, use the new value and clear city.
+      $current_parent = $selected_province;
+      $current_value = NULL;
+    }
 
-     $form['location_wrapper']['field_canadian_towns_province'] = [
-       '#type' => 'select',
-       '#title' => $this->t('Province'),
-       '#options' => $this->getProvinceOptions(),
-       '#empty_option' => $this->t('- Select Province -'),
-       '#default_value' => $current_parent,
-       '#required' => $form['field_canadian_towns']['widget']['#required'] ?? FALSE,
-       '#attributes' => [
-         'data-drupal-selector' => 'edit-field-canadian-towns-province',
-         'style' => 'flex: 1; min-width: 200px;',
-       ],
-     ];
+    // Create inline container for location fields.
+    $form['location_wrapper'] = [
+      '#type' => 'container',
+      '#weight' => $form['field_canadian_towns']['#weight'] ?? 0,
+      '#attributes' => [
+        'class' => ['location-fields-inline'],
+        'style' => 'display: flex; gap: 1rem; flex-wrap: wrap;',
+      ],
+    ];
 
-     $form['location_wrapper']['field_canadian_towns_city'] = [
-       '#type' => 'textfield',
-       '#title' => $this->t('City'),
-       '#default_value' => $current_value ? $this->getTermName($current_value) . ' (' . $current_value . ')' : '',
-       '#disabled' => empty($current_parent),
-       '#placeholder' => empty($current_parent) ? $this->t('Select a province first') : $this->t('Start typing city name...'),
-       '#autocomplete_route_name' => 'helper_module.city_autocomplete',
-       '#autocomplete_route_parameters' => ['province' => $current_parent ?? 0],
-       '#attributes' => [
-         'data-drupal-selector' => 'edit-field-canadian-towns-city',
-         'style' => 'flex: 1; min-width: 200px;',
-       ],
-       '#prefix' => '<div id="field-canadian-towns-city-wrapper" style="flex: 1; min-width: 200px;">',
-       '#suffix' => '</div>',
-     ];
+    $form['location_wrapper']['field_canadian_towns_province'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Province'),
+      '#options' => $this->getProvinceOptions(),
+      '#empty_option' => $this->t('- Select Province -'),
+      '#default_value' => $current_parent,
+      '#required' => $form['field_canadian_towns']['widget']['#required'] ?? FALSE,
+      '#attributes' => [
+        'data-drupal-selector' => 'edit-field-canadian-towns-province',
+        'style' => 'flex: 1; min-width: 200px;',
+      ],
+      '#ajax' => [
+        'callback' => [$this, 'ajaxUpdateCityField'],
+        'wrapper' => 'field-canadian-towns-city-wrapper',
+        'event' => 'change',
+      ],
+    ];
 
-     // Move address field into the wrapper and make it full width
-     if (isset($form['field_listing_address'])) {
-       $form['location_wrapper']['field_listing_address'] = $form['field_listing_address'];
-       $form['location_wrapper']['field_listing_address']['#weight'] = 10;
-       $form['location_wrapper']['field_listing_address']['#attributes']['style'] = 'flex: 1 1 100%; min-width: 100%;';
-       unset($form['field_listing_address']);
-     }
+    $form['location_wrapper']['field_canadian_towns_city'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('City'),
+      '#default_value' => $current_value ? $this->getTermName($current_value) . ' (' . $current_value . ')' : '',
+      '#disabled' => empty($current_parent),
+      '#placeholder' => empty($current_parent) ? $this->t('Select a province first') : $this->t('Start typing city name...'),
+      '#autocomplete_route_name' => 'helper_module.city_autocomplete',
+      '#autocomplete_route_parameters' => ['province' => $current_parent ?? 0],
+      '#attributes' => [
+        'data-drupal-selector' => 'edit-field-canadian-towns-city',
+        'data-province-id' => $current_parent ?? 0,
+        'style' => 'flex: 1; min-width: 200px;',
+      ],
+      '#prefix' => '<div id="field-canadian-towns-city-wrapper" style="flex: 1; min-width: 200px;">',
+      '#suffix' => '</div>',
+    ];
 
-     $form['field_canadian_towns']['#access'] = FALSE;
-     $form['#validate'][] = [$this, 'validateCanadianTowns'];
-     $form['#attached']['library'][] = 'helper_module/location-autocomplete';
-   }
+    // Move address field into the wrapper and make it full width.
+    if (isset($form['field_listing_address'])) {
+      $form['location_wrapper']['field_listing_address'] = $form['field_listing_address'];
+      $form['location_wrapper']['field_listing_address']['#weight'] = 10;
+      $form['location_wrapper']['field_listing_address']['#attributes']['style'] = 'flex: 1 1 100%; min-width: 100%;';
+      unset($form['field_listing_address']);
+    }
+
+    $form['field_canadian_towns']['#access'] = FALSE;
+    $form['#validate'][] = [$this, 'validateCanadianTowns'];
+    $form['#attached']['library'][] = 'helper_module/location-autocomplete';
+  }
+
+  /**
+   * AJAX callback to update city field when province changes.
+   *
+   * @param array $form
+   *   The form array.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state.
+   *
+   * @return array
+   *   The city field element to replace.
+   */
+  public function ajaxUpdateCityField(array &$form, FormStateInterface $form_state): array {
+    return $form['location_wrapper']['field_canadian_towns_city'];
+  }
+
   /**
    * Gets province options (parent terms only).
    */
@@ -245,11 +275,6 @@ public function alterListingForm(array &$form, FormStateInterface $form_state): 
             $node->set('field_street_location', [
               'lat' => $result['location']['lat'],
               'lng' => $result['location']['lng'],
-            ]);
-
-            \Drupal::logger('helper_module')->info('Geocoded listing @id: @address', [
-              '@id' => $node->id(),
-              '@address' => $full_address,
             ]);
             return;
           }

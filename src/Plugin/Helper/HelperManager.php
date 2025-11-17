@@ -53,10 +53,6 @@ class HelperManager extends DefaultPluginManager {
     public function getDefinitions(): array {
         $definitions = parent::getDefinitions();
 
-        \Drupal::logger('helper_module')->notice('Discovered plugin definitions: @plugins', [
-            '@plugins' => print_r($definitions, TRUE),
-        ]);
-
         if (empty($definitions)) {
             // Explicit logging and interruption to detect empty discovery.
             \Drupal::logger('helper_module')->error('No plugins were discovered. Verify discovery paths and `#[Helper]` attribute parsing.');
