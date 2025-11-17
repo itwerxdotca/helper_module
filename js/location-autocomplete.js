@@ -19,31 +19,11 @@
           cityInput.disabled = false;
           cityInput.placeholder = 'Start typing city name...';
         } else {
-          // No province selected - disable autocomplete completely.
-          cityInput.setAttribute('data-autocomplete-path', '');
+          // No province selected - remove autocomplete path completely.
+          cityInput.removeAttribute('data-autocomplete-path');
           cityInput.disabled = true;
           cityInput.placeholder = 'Select a province first';
           cityInput.value = '';
-
-          // Remove all autocomplete-related attributes and classes.
-          cityInput.classList.remove('ui-autocomplete-input');
-          cityInput.removeAttribute('autocomplete');
-          cityInput.removeAttribute('role');
-          cityInput.removeAttribute('aria-autocomplete');
-          cityInput.removeAttribute('aria-haspopup');
-          cityInput.removeAttribute('aria-expanded');
-
-          // Remove any visible autocomplete dropdown.
-          const autocompleteList = document.getElementById(cityInput.id + '-autocomplete');
-          if (autocompleteList) {
-            autocompleteList.remove();
-          }
-
-          // Find and remove any ui-autocomplete elements.
-          const uiAutocompleteLists = document.querySelectorAll('.ui-autocomplete');
-          uiAutocompleteLists.forEach(function(list) {
-            list.remove();
-          });
         }
       });
     }

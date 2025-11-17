@@ -121,14 +121,13 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       ],
     ];
 
-    $form['location_wrapper']['field_canadian_towns_city'] = [
+    // Build the city field.
+    $city_field = [
       '#type' => 'textfield',
       '#title' => $this->t('City'),
       '#default_value' => $current_value ? $this->getTermName($current_value) . ' (' . $current_value . ')' : '',
       '#disabled' => empty($current_parent),
       '#placeholder' => empty($current_parent) ? $this->t('Select a province first') : $this->t('Start typing city name...'),
-      '#autocomplete_route_name' => 'helper_module.city_autocomplete',
-      '#autocomplete_route_parameters' => ['province' => $current_parent ?? 0],
       '#attributes' => [
         'data-drupal-selector' => 'edit-field-canadian-towns-city',
         'data-province-id' => $current_parent ?? 0,
@@ -137,6 +136,14 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       '#prefix' => '<div id="field-canadian-towns-city-wrapper" style="flex: 1; min-width: 200px;">',
       '#suffix' => '</div>',
     ];
+
+    // Only add autocomplete if there's a valid province selected.
+    if (!empty($current_parent) && $current_parent !== '_none') {
+      $city_field['#autocomplete_route_name'] = 'helper_module.city_autocomplete';
+      $city_field['#autocomplete_route_parameters'] = ['province' => $current_parent];
+    }
+
+    $form['location_wrapper']['field_canadian_towns_city'] = $city_field;
 
     // Move address field into the wrapper and make it full width.
     if (isset($form['field_listing_address'])) {
