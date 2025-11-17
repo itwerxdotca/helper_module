@@ -146,11 +146,11 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     $form['location_wrapper']['field_canadian_towns_city'] = $city_field;
 
     // Move address field into the wrapper and make it full width.
-    if (isset($form['field_listing_address'])) {
-      $form['location_wrapper']['field_listing_address'] = $form['field_listing_address'];
-      $form['location_wrapper']['field_listing_address']['#weight'] = 10;
-      $form['location_wrapper']['field_listing_address']['#attributes']['style'] = 'flex: 1 1 100%; min-width: 100%;';
-      unset($form['field_listing_address']);
+    if (isset($form['field_street_address'])) {
+      $form['location_wrapper']['field_street_address'] = $form['field_street_address'];
+      $form['location_wrapper']['field_street_address']['#weight'] = 10;
+      $form['location_wrapper']['field_street_address']['#attributes']['style'] = 'flex: 1 1 100%; min-width: 100%;';
+      unset($form['field_street_address']);
     }
 
     $form['field_canadian_towns']['#access'] = FALSE;
@@ -230,14 +230,17 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     $address_parts = [];
 
     // Add street address.
-    if (!$node->get('field_listing_address')->isEmpty()) {
-      $address_field = $node->get('field_listing_address')->first();
+    if (!$node->get('field_street_address')->isEmpty()) {
+      $address_field = $node->get('field_street_address')->first();
       if ($address_field) {
         if ($address_field->address_line1) {
           $address_parts[] = $address_field->address_line1;
         }
         if ($address_field->address_line2) {
           $address_parts[] = $address_field->address_line2;
+        }
+        if ($address_field->postal_code) {
+          $address_parts[] = $address_field->postal_code;
         }
       }
     }
@@ -256,22 +259,18 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       }
     }
 
-    // Add postal code if available.
-    if (!$node->get('field_listing_address')->isEmpty()) {
-      $address_field = $node->get('field_listing_address')->first();
-      if ($address_field && $address_field->postal_code) {
-        $address_parts[] = $address_field->postal_code;
-      }
-    }
-
     $address_parts[] = 'Canada';
 
     $full_address = implode(', ', array_filter($address_parts));
 
-    if (empty($full_address)) {
-      \Drupal::logger('helper_module')->warning('No address data available for listing @id', [
-        '@id' => $node->id(),
-      ]);
+    // Skip if no meaningful address data.
+    if (empty($full_address) || $full_address === 'Canada') {
+      return;
+    }
+
+    // Check if geolocation module is available.
+    if (!\Drupal::hasService('plugin.manager.geolocation.geocoder')) {
+      \Drupal::logger('helper_module')->error('Geolocation geocoder service not available. Make sure Geolocation Geocoder module is enabled.');
       return;
     }
 
@@ -281,7 +280,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       $geocoder_definitions = $geocoder_manager->getDefinitions();
 
       if (empty($geocoder_definitions)) {
-        \Drupal::logger('helper_module')->warning('No geocoder plugins available');
+        \Drupal::logger('helper_module')->warning('No geocoder plugins available. Configure a geocoder in Geolocation settings.');
         return;
       }
 
@@ -290,26 +289,16 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
           $geocoder = $geocoder_manager->createInstance($plugin_id);
           $result = $geocoder->geocode($full_address);
 
-          if (!empty($result['location'])) {
+          if (!empty($result['location']['lat']) && !empty($result['location']['lng'])) {
             $node->set('field_street_location', [
               'lat' => $result['location']['lat'],
               'lng' => $result['location']['lng'],
-            ]);
-
-            \Drupal::logger('helper_module')->info('Geocoded listing @id: @address -> @lat, @lng', [
-              '@id' => $node->id(),
-              '@address' => $full_address,
-              '@lat' => $result['location']['lat'],
-              '@lng' => $result['location']['lng'],
             ]);
             return;
           }
         }
         catch (\Exception $e) {
-          \Drupal::logger('helper_module')->debug('Geocoder @plugin failed: @message', [
-            '@plugin' => $plugin_id,
-            '@message' => $e->getMessage(),
-          ]);
+          // Try next geocoder.
           continue;
         }
       }
