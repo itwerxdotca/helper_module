@@ -15,14 +15,6 @@ class CityAutocompleteController extends ControllerBase {
 
   /**
    * Returns city autocomplete suggestions filtered by province.
-   *
-   * @param \Symfony\Component\HttpFoundation\Request $request
-   *   The request object.
-   * @param string $province
-   *   The province term ID.
-   *
-   * @return \Symfony\Component\HttpFoundation\JsonResponse
-   *   A JSON response containing matching cities.
    */
   public function autocomplete(Request $request, string $province): JsonResponse {
     $results = [];
@@ -32,11 +24,10 @@ class CityAutocompleteController extends ControllerBase {
       return new JsonResponse($results);
     }
 
-    // Query only children of specific province.
     $query = $this->entityTypeManager()
       ->getStorage('taxonomy_term')
       ->getQuery()
-      ->condition('vid', 'canadian_locations')
+      ->condition('vid', 'canadian_towns')
       ->condition('parent', $province)
       ->condition('name', $input, 'CONTAINS')
       ->range(0, 10)
