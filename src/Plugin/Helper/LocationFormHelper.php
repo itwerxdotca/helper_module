@@ -145,11 +145,46 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
 
     $form['location_wrapper']['field_canadian_towns_city'] = $city_field;
 
-    // Move address field into the wrapper and make it full width.
+    // Move and style address field.
     if (isset($form['field_street_address'])) {
       $form['location_wrapper']['field_street_address'] = $form['field_street_address'];
       $form['location_wrapper']['field_street_address']['#weight'] = 10;
+
+      // Hide the main label.
+      $form['location_wrapper']['field_street_address']['#title_display'] = 'invisible';
+
+      // Style the address widget wrapper.
       $form['location_wrapper']['field_street_address']['#attributes']['style'] = 'flex: 1 1 100%; min-width: 100%;';
+
+      // Access the first (and only) delta item.
+      if (isset($form['location_wrapper']['field_street_address']['widget'][0])) {
+        $widget = &$form['location_wrapper']['field_street_address']['widget'][0];
+
+        // Change fieldset to container to remove border.
+        $widget['#type'] = 'container';
+        $widget['#attributes']['style'] = 'border: none; padding: 0;';
+
+        // Hide the title.
+        $widget['#title_display'] = 'invisible';
+
+        // Access the address element and apply inline styles.
+        if (isset($widget['address'])) {
+          $widget['address']['#attributes']['style'] = 'display: flex; gap: 1rem; flex-wrap: wrap;';
+
+          // Style address_line1 (now visible based on field_overrides).
+          if (isset($widget['address']['#address_element_properties']['address_line1'])) {
+            $widget['address']['#address_element_properties']['address_line1']['#attributes']['style'] = 'flex: 2; min-width: 300px;';
+            $widget['address']['#address_element_properties']['address_line1']['#attributes']['placeholder'] = $this->t('Street Address');
+          }
+
+          // Style postal_code (now visible based on field_overrides).
+          if (isset($widget['address']['#address_element_properties']['postal_code'])) {
+            $widget['address']['#address_element_properties']['postal_code']['#attributes']['style'] = 'flex: 1; min-width: 150px;';
+            $widget['address']['#address_element_properties']['postal_code']['#attributes']['placeholder'] = $this->t('Postal Code');
+          }
+        }
+      }
+
       unset($form['field_street_address']);
     }
 
