@@ -1,5 +1,8 @@
 location-autocomplete:
   version: 1.x
+  css:
+    component:
+      css/location-inline.css: {}
   js:
     js/location-autocomplete.js: {}
   dependencies:

@@ -145,10 +145,49 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
 
     $form['location_wrapper']['field_canadian_towns_city'] = $city_field;
 
+    // --- Dynamic Field Group detection and application ---
+    // Try to discover the Field Group machine name that contains
+    // field_canadian_towns by reading the entity_form_display third_party_settings.
+    $group_machine = NULL;
+    if ($entity) {
+      $bundle = $entity->bundle();
+      $form_display = $this->entityTypeManager
+        ->getStorage('entity_form_display')
+        ->load("node.{$bundle}.default");
+
+      if ($form_display) {
+        $third_party = $form_display->get('third_party_settings') ?? [];
+        if (!empty($third_party['field_group']) && is_array($third_party['field_group'])) {
+          foreach ($third_party['field_group'] as $gname => $ginfo) {
+            // Each group entry contains 'children' => [ ... ].
+            if (!empty($ginfo['children']) && is_array($ginfo['children'])) {
+              if (in_array('field_canadian_towns', $ginfo['children'], TRUE)) {
+                $group_machine = $gname;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if ($group_machine) {
+      // Apply the discovered group to wrapper and children so Field Group will place them.
+      $form['location_wrapper']['#group'] = $group_machine;
+      $form['location_wrapper']['field_canadian_towns_province']['#group'] = $group_machine;
+      $form['location_wrapper']['field_canadian_towns_city']['#group'] = $group_machine;
+    }
+    // --- End dynamic group detection ---
+
     // Move and style address field.
     if (isset($form['field_street_address'])) {
       $form['location_wrapper']['field_street_address'] = $form['field_street_address'];
       $form['location_wrapper']['field_street_address']['#weight'] = 10;
+
+      // If we discovered a group, ensure the street address is moved into it as well.
+      if (!empty($group_machine) && isset($form['location_wrapper']['field_street_address'])) {
+        $form['location_wrapper']['field_street_address']['#group'] = $group_machine;
+      }
 
       // Hide the main label.
       $form['location_wrapper']['field_street_address']['#title_display'] = 'invisible';
