@@ -21,7 +21,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
   id: 'location_form',
   label: new TranslatableMarkup('Canadian Towns Location Helper'),
   description: new TranslatableMarkup('Manages provinces and cities dynamically for field_canadian_towns'),
-  weight: 0,
+  weight: 100,
 )]
 class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInterface {
 
@@ -93,6 +93,31 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       $current_value = NULL;
     }
 
+    // Defer the form alteration to run after Field Group processes the form.
+    // This ensures field groups render properly before we move fields around.
+    $form['#after_build'][] = [$this, 'afterBuildLocationFields'];
+
+    // Store values in form state for use in after_build.
+    $form_state->set('location_current_value', $current_value);
+    $form_state->set('location_current_parent', $current_parent);
+
+    // Hide the original field immediately so it doesn't show in the form.
+    $form['field_canadian_towns']['#access'] = FALSE;
+
+    // Validation handler to map province/city back to field_canadian_towns.
+    $form['#validate'][] = [$this, 'validateCanadianTowns'];
+
+    // Attach our library (CSS + JS).
+    $form['#attached']['library'][] = 'helper_module/location-autocomplete';
+  }
+
+  /**
+   * After build callback to create location fields after Field Group processes form.
+   */
+  public function afterBuildLocationFields(array $form, FormStateInterface $form_state): array {
+    $current_value = $form_state->get('location_current_value');
+    $current_parent = $form_state->get('location_current_parent');
+
     // Create inline container for location fields.
     $form['location_wrapper'] = [
       '#type' => 'container',
@@ -145,49 +170,10 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
 
     $form['location_wrapper']['field_canadian_towns_city'] = $city_field;
 
-    // --- Dynamic Field Group detection and application ---
-    // Try to discover the Field Group machine name that contains
-    // field_canadian_towns by reading the entity_form_display third_party_settings.
-    $group_machine = NULL;
-    if ($entity) {
-      $bundle = $entity->bundle();
-      $form_display = $this->entityTypeManager
-        ->getStorage('entity_form_display')
-        ->load("node.{$bundle}.default");
-
-      if ($form_display) {
-        $third_party = $form_display->get('third_party_settings') ?? [];
-        if (!empty($third_party['field_group']) && is_array($third_party['field_group'])) {
-          foreach ($third_party['field_group'] as $gname => $ginfo) {
-            // Each group entry contains 'children' => [ ... ].
-            if (!empty($ginfo['children']) && is_array($ginfo['children'])) {
-              if (in_array('field_canadian_towns', $ginfo['children'], TRUE)) {
-                $group_machine = $gname;
-                break;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    if ($group_machine) {
-      // Apply the discovered group to wrapper and children so Field Group will place them.
-      $form['location_wrapper']['#group'] = $group_machine;
-      $form['location_wrapper']['field_canadian_towns_province']['#group'] = $group_machine;
-      $form['location_wrapper']['field_canadian_towns_city']['#group'] = $group_machine;
-    }
-    // --- End dynamic group detection ---
-
     // Move and style address field.
     if (isset($form['field_street_address'])) {
       $form['location_wrapper']['field_street_address'] = $form['field_street_address'];
       $form['location_wrapper']['field_street_address']['#weight'] = 10;
-
-      // If we discovered a group, ensure the street address is moved into it as well.
-      if (!empty($group_machine) && isset($form['location_wrapper']['field_street_address'])) {
-        $form['location_wrapper']['field_street_address']['#group'] = $group_machine;
-      }
 
       // Hide the main label.
       $form['location_wrapper']['field_street_address']['#title_display'] = 'invisible';
@@ -227,9 +213,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       unset($form['field_street_address']);
     }
 
-    $form['field_canadian_towns']['#access'] = FALSE;
-    $form['#validate'][] = [$this, 'validateCanadianTowns'];
-    $form['#attached']['library'][] = 'helper_module/location-autocomplete';
+    return $form;
   }
 
   /**

@@ -1,0 +1,64 @@
+/* modules/custom/helper_module/css/location-inline.css
+   Minimal, targeted rules to ensure the inline location fields remain on one row
+   even when wrapped by Field Group / details / fieldset markup. */
+
+.location-fields-inline {
+  display: flex !important;
+  gap: 1rem !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+}
+
+/* Make the immediate wrappers behave as flex items. Covers .form-item, fieldset wrappers, field-group wrappers. */
+.location-fields-inline > .form-item,
+.location-fields-inline > * > .form-item,
+.location-fields-inline > div,
+.location-fields-inline > details > .fieldset-wrapper,
+.location-fields-inline .fieldset-wrapper,
+.location-fields-inline .field-group,
+.location-fields-inline .field--name-field-canadian-towns {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  flex: 1 1 200px !important;
+  min-width: 200px !important;
+}
+
+/* If Field Group puts the input inside a .fieldset-wrapper > .form-item, target that too. */
+.location-fields-inline .fieldset-wrapper > .form-item,
+.location-fields-inline .fieldset-wrapper > div > .form-item {
+  display: inline-flex !important;
+  flex: 1 1 200px !important;
+  min-width: 200px !important;
+}
+
+/* Ensure an AJAX wrapper with this id is treated like the other wrappers */
+#field-canadian-towns-city-wrapper,
+#field-canadian-towns-city-wrapper > .form-item {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex: 1 1 200px !important;
+  min-width: 200px !important;
+}
+
+/* Keep address field full width */
+.location-fields-inline .field--name-field-street-address,
+.location-fields-inline .field--name-field-street-address .form-item {
+  flex: 1 1 100% !important;
+  min-width: 100% !important;
+  display: block !important;
+}
+
+/* Small screens: stack */
+@media (max-width: 640px) {
+  .location-fields-inline,
+  .location-fields-inline > .form-item,
+  .location-fields-inline > * > .form-item {
+    flex-direction: column !important;
+  }
+  .location-fields-inline > .form-item,
+  .location-fields-inline > * > .form-item {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+}
