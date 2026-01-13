@@ -21,7 +21,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
   id: 'location_form',
   label: new TranslatableMarkup('Canadian Towns Location Helper'),
   description: new TranslatableMarkup('Manages provinces and cities dynamically for field_canadian_towns'),
-  weight: 100,
+  weight: 0,
 )]
 class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInterface {
 
@@ -92,31 +92,6 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       $current_parent = $selected_province;
       $current_value = NULL;
     }
-
-    // Defer the form alteration to run after Field Group processes the form.
-    // This ensures field groups render properly before we move fields around.
-    $form['#after_build'][] = [$this, 'afterBuildLocationFields'];
-
-    // Store values in form state for use in after_build.
-    $form_state->set('location_current_value', $current_value);
-    $form_state->set('location_current_parent', $current_parent);
-
-    // Hide the original field immediately so it doesn't show in the form.
-    $form['field_canadian_towns']['#access'] = FALSE;
-
-    // Validation handler to map province/city back to field_canadian_towns.
-    $form['#validate'][] = [$this, 'validateCanadianTowns'];
-
-    // Attach our library (CSS + JS).
-    $form['#attached']['library'][] = 'helper_module/location-autocomplete';
-  }
-
-  /**
-   * After build callback to create location fields after Field Group processes form.
-   */
-  public function afterBuildLocationFields(array $form, FormStateInterface $form_state): array {
-    $current_value = $form_state->get('location_current_value');
-    $current_parent = $form_state->get('location_current_parent');
 
     // Create inline container for location fields.
     $form['location_wrapper'] = [
@@ -213,7 +188,9 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       unset($form['field_street_address']);
     }
 
-    return $form;
+    $form['field_canadian_towns']['#access'] = FALSE;
+    $form['#validate'][] = [$this, 'validateCanadianTowns'];
+    $form['#attached']['library'][] = 'helper_module/location-autocomplete';
   }
 
   /**

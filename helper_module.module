@@ -1,4 +1,4 @@
-<?php
+<? php
 
 /**
  * @file
@@ -14,11 +14,11 @@ use Drupal\Core\Form\FormStateInterface;
  */
 function helper_module_help(string $route_name, $route_match) {
   switch ($route_name) {
-    case 'help.page.helper_module':
+    case 'help.page. helper_module':
       $output = '<h2>' . t('About') . '</h2>';
       $output .= '<p>' . t('Helper Module provides a pluggable architecture for site-specific customizations using the Drupal plugin system.') . '</p>';
       $output .= '<h2>' . t('Creating Helper Plugins') . '</h2>';
-      $output .= '<p>' . t('To create a helper plugin, create a PHP class in the <code>src/Plugin/Helper</code> directory that extends <code>HelperBase</code> and uses the <code>#[Helper]</code> attribute.') . '</p>';
+      $output .= '<p>' . t('To create a helper plugin, create a PHP class in the <code>src/Plugin/Helper</code> directory that extends <code>HelperBase</code> and uses the <code>#[Helper]</code> attribute. ') . '</p>';
       return $output;
   }
   return '';
@@ -63,7 +63,7 @@ function helper_module_node_presave(Drupal\Core\Entity\EntityInterface $node) {
   $helper_manager = \Drupal::service('plugin.manager.helper');
 
   try {
-    // Use the correct plugin ID: 'location_form' instead of 'listing_location'.
+    // Use the correct plugin ID:  'location_form' instead of 'listing_location'.
     $location_helper = $helper_manager->createInstance('location_form');
 
     if (method_exists($location_helper, 'geocodeListing')) {
@@ -72,5 +72,67 @@ function helper_module_node_presave(Drupal\Core\Entity\EntityInterface $node) {
   }
   catch (\Exception $e) {
     \Drupal::logger('helper_module')->error('Error geocoding listing: @message', ['@message' => $e->getMessage()]);
+  }
+}
+
+/**
+ * Implements hook_metatag_alter().
+ *
+ * Dynamically sets schema_place_type based on listing category taxonomy term.
+ */
+function helper_module_metatag_alter(array &$metatags, array $context) {
+  // Only process if we have an entity in the context.
+  if (!isset($context['entity'])) {
+    return;
+  }
+
+  $entity = $context['entity'];
+
+  // Only process listing content type nodes.
+  if ($entity->getEntityTypeId() !== 'node' || $entity->bundle() !== 'listing') {
+    return;
+  }
+
+  // Check if the listing category field exists and has a value.
+  if (!$entity->hasField('field_listing_category') || $entity->get('field_listing_category')->isEmpty()) {
+    return;
+  }
+
+  $helper_manager = \Drupal:: service('plugin.manager.helper');
+
+  try {
+    // Load the Schema Type Helper plugin.
+    $schema_helper = $helper_manager->createInstance('schema_type_mapper');
+
+    // Get the taxonomy term.
+    $term_id = (int) $entity->get('field_listing_category')->target_id;
+    $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->load($term_id);
+
+    if ($term && method_exists($schema_helper, 'getSchemaTypeForTerm')) {
+      $schema_type = $schema_helper->getSchemaTypeForTerm($term);
+
+      if ($schema_type !== NULL) {
+        $metatags['schema_place_type'] = $schema_type;
+
+        \Drupal::logger('helper_module')->debug(
+          'Updated schema_place_type to @type for listing @nid (term:  @term_name [tid: @tid])',
+          [
+            '@type' => $schema_type,
+            '@nid' => $entity->id(),
+            '@term_name' => $term->getName(),
+            '@tid' => $term_id,
+          ]
+        );
+      }
+    }
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('helper_module')->error(
+      'Error determining schema type for listing @nid: @message',
+      [
+        '@nid' => $entity->id(),
+        '@message' => $e->getMessage(),
+      ]
+    );
   }
 }
