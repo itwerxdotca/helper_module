@@ -41,6 +41,41 @@ function helper_module_form_alter(&$form, FormStateInterface $form_state, $form_
     }
   }
 }
+
+/**
+ * Implements hook_form_views_exposed_form_alter().
+ *
+ * Wires the province -> city cascading UI into the Listing and POI search
+ * pages, reusing the same location_form helper plugin already used on the
+ * node add/edit forms above.
+ */
+function helper_module_form_views_exposed_form_alter(&$form, FormStateInterface $form_state) {
+  $view = $form_state->get('view');
+  if (!$view) {
+    return;
+  }
+
+  if (!in_array($view->id(), ['listings_search', 'point_of_interest_search'], TRUE)) {
+    return;
+  }
+
+  $helper_manager = \Drupal::service('plugin.manager.helper');
+  try {
+    $location_helper = $helper_manager->createInstance('location_form');
+    if (method_exists($location_helper, 'alterSearchForm')) {
+      $location_helper->alterSearchForm($form, $form_state);
+    }
+    else {
+      throw new \LogicException('The LocationFormHelper plugin is missing the required method alterSearchForm.');
+    }
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('helper_module')->error('An error occurred while loading the LocationFormHelper plugin for search: @message', [
+      '@message' => $e->getMessage(),
+    ]);
+  }
+}
+
 /**
  * Implements hook_ENTITY_TYPE_presave() for node entities.
  */
