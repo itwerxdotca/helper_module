@@ -255,6 +255,127 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
   }
 
   /**
+   * Alters a Views exposed search form to add the province/city UI.
+   *
+   * Same province -> city cascading pattern as alterListingForm(), reused
+   * here for the Listing/POI search pages. Unlike the node form, this
+   * doesn't touch a real content entity field - it drives a plain hidden
+   * numeric Search API exposed filter (identifier "town") that the Views
+   * query filters on directly.
+   *
+   * @param array $form
+   *   The views exposed form array.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state.
+   */
+  public function alterSearchForm(array &$form, FormStateInterface $form_state): void {
+    if (!isset($form['town'])) {
+      return;
+    }
+
+    $selected_province = $form_state->getValue('town_province');
+    if ($selected_province === NULL || $selected_province === '') {
+      $user_input = $form_state->getUserInput();
+      $selected_province = $user_input['town_province'] ?? NULL;
+    }
+    $current_city_tid = $form_state->getValue('town');
+    $current_parent = NULL;
+
+    if ($selected_province !== NULL && $selected_province !== '') {
+      // Province just changed via AJAX - town selection resets.
+      $current_parent = $selected_province;
+      $current_city_tid = NULL;
+    }
+    elseif (!empty($current_city_tid)) {
+      // Town already chosen on a previous submission - derive its
+      // province so the select stays in sync on rebuild.
+      $parents = $this->entityTypeManager->getStorage('taxonomy_term')->loadParents((int) $current_city_tid);
+      if (!empty($parents)) {
+        $current_parent = reset($parents)->id();
+      }
+    }
+
+    $form['town_province'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Province'),
+      '#options' => $this->getProvinceOptions(),
+      '#empty_option' => $this->t('- Any Province -'),
+      '#default_value' => $current_parent,
+      '#weight' => $form['town']['#weight'] ?? -5,
+      '#ajax' => [
+        'callback' => '\Drupal\helper_module\Plugin\Helper\LocationFormHelper::ajaxUpdateSearchCityField',
+        'wrapper' => 'search-town-city-wrapper',
+        'event' => 'change',
+      ],
+    ];
+
+    $city_field = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Town'),
+      '#default_value' => $current_city_tid
+        ? $this->getTermName((int) $current_city_tid) . ' (' . $current_city_tid . ')'
+        : '',
+      '#disabled' => empty($current_parent),
+      '#placeholder' => empty($current_parent)
+        ? $this->t('Select a province first')
+        : $this->t('Start typing town name...'),
+      '#prefix' => '<div id="search-town-city-wrapper">',
+      '#suffix' => '</div>',
+      '#weight' => ($form['town']['#weight'] ?? -5) + 1,
+    ];
+
+    if (!empty($current_parent) && $current_parent !== '_none') {
+      $city_field['#autocomplete_route_name'] = 'helper_module.city_autocomplete';
+      $city_field['#autocomplete_route_parameters'] = ['province' => $current_parent];
+    }
+
+    $form['town_city'] = $city_field;
+
+    // Hide the raw exposed filter - it's populated on validate below,
+    // matching the same approach used for field_canadian_towns on the
+    // node form ($form['field_canadian_towns']['#access'] = FALSE there).
+    $form['town']['#type'] = 'hidden';
+    $form['town']['#title_display'] = 'invisible';
+
+    $form['#validate'][] = [$this, 'validateSearchTown'];
+  }
+
+  /**
+   * AJAX callback: returns the rebuilt city field after province changes.
+   *
+   * @param array $form
+   *   The form array.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state.
+   *
+   * @return array
+   *   The city field element to replace.
+   */
+  public static function ajaxUpdateSearchCityField(array &$form, FormStateInterface $form_state): array {
+    return $form['town_city'];
+  }
+
+  /**
+   * Maps the chosen "Town Name (123)" string onto the raw town filter.
+   *
+   * Same parsing convention as validateCanadianTowns(), reused here for
+   * the search exposed filter instead of a content entity field.
+   */
+  public function validateSearchTown(array &$form, FormStateInterface $form_state): void {
+    $city_value = $form_state->getValue('town_city');
+
+    if (!empty($city_value) && preg_match('/\((\d+)\)$/', (string) $city_value, $matches)) {
+      $form_state->setValue('town', $matches[1]);
+      return;
+    }
+
+    // No specific town selected - province alone does not filter results,
+    // it only scopes the autocomplete. Clear the filter so an incomplete
+    // selection doesn't unintentionally restrict the query.
+    $form_state->setValue('town', '');
+  }
+
+  /**
    * Geocodes and saves location data for a listing node.
    */
   public function geocodeListing(NodeInterface $node): void {

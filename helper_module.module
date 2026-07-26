@@ -1,41 +1,32 @@
-<? php
-
+<?php
 /**
  * @file
  * Primary module hooks for Helper Module.
  */
-
 declare(strict_types=1);
-
 use Drupal\Core\Form\FormStateInterface;
-
 /**
  * Implements hook_help().
  */
 function helper_module_help(string $route_name, $route_match) {
   switch ($route_name) {
-    case 'help.page. helper_module':
+    case 'help.page.helper_module':
       $output = '<h2>' . t('About') . '</h2>';
-      $output .= '<p>' . t('Helper Module provides a pluggable architecture for site-specific customizations using the Drupal plugin system.') . '</p>';
+      $output .= '<p>' .  t('Helper Module provides a pluggable architecture for site-specific customizations using the Drupal plugin system.') . '</p>';
       $output .= '<h2>' . t('Creating Helper Plugins') . '</h2>';
-      $output .= '<p>' . t('To create a helper plugin, create a PHP class in the <code>src/Plugin/Helper</code> directory that extends <code>HelperBase</code> and uses the <code>#[Helper]</code> attribute. ') . '</p>';
+      $output .= '<p>' . t('To create a helper plugin, create a PHP class in the <code>src/Plugin/Helper</code> directory that extends <code>HelperBase</code> and uses the <code>#[Helper]</code> attribute.') . '</p>';
       return $output;
   }
   return '';
 }
-
 /**
  * Implements hook_form_alter().
  */
 function helper_module_form_alter(&$form, FormStateInterface $form_state, $form_id) {
   if ($form_id === 'node_listing_form' || $form_id === 'node_listing_edit_form') {
     $helper_manager = \Drupal::service('plugin.manager.helper');
-
     try {
-      // Safely load the plugin by ID.
       $location_helper = $helper_manager->createInstance('location_form');
-
-      // Verify the loaded plugin has the desired method.
       if (method_exists($location_helper, 'alterListingForm')) {
         $location_helper->alterListingForm($form, $form_state);
       }
@@ -50,22 +41,50 @@ function helper_module_form_alter(&$form, FormStateInterface $form_state, $form_
     }
   }
 }
+/**
+ * Implements hook_form_views_exposed_form_alter().
+ *
+ * Wires the province -> city cascading UI into the Listing and POI search
+ * pages, reusing the same location_form helper plugin already used on the
+ * node add/edit forms above.
+ */
+function helper_module_form_views_exposed_form_alter(&$form, FormStateInterface $form_state) {
+  $view = $form_state->get('view');
+  if (!$view) {
+    return;
+  }
+
+  if (!in_array($view->id(), ['listings_search', 'point_of_interest_search'], TRUE)) {
+    return;
+  }
+
+  $helper_manager = \Drupal::service('plugin.manager.helper');
+  try {
+    $location_helper = $helper_manager->createInstance('location_form');
+    if (method_exists($location_helper, 'alterSearchForm')) {
+      $location_helper->alterSearchForm($form, $form_state);
+    }
+    else {
+      throw new \LogicException('The LocationFormHelper plugin is missing the required method alterSearchForm.');
+    }
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('helper_module')->error('An error occurred while loading the LocationFormHelper plugin for search: @message', [
+      '@message' => $e->getMessage(),
+    ]);
+  }
+}
 
 /**
  * Implements hook_ENTITY_TYPE_presave() for node entities.
  */
 function helper_module_node_presave(Drupal\Core\Entity\EntityInterface $node) {
-  // Only process listing nodes.
   if ($node->bundle() !== 'listing') {
     return;
   }
-
   $helper_manager = \Drupal::service('plugin.manager.helper');
-
   try {
-    // Use the correct plugin ID:  'location_form' instead of 'listing_location'.
     $location_helper = $helper_manager->createInstance('location_form');
-
     if (method_exists($location_helper, 'geocodeListing')) {
       $location_helper->geocodeListing($node);
     }
@@ -76,63 +95,45 @@ function helper_module_node_presave(Drupal\Core\Entity\EntityInterface $node) {
 }
 
 /**
- * Implements hook_metatag_alter().
- *
- * Dynamically sets schema_place_type based on listing category taxonomy term.
- */
-function helper_module_metatag_alter(array &$metatags, array $context) {
-  // Only process if we have an entity in the context.
-  if (!isset($context['entity'])) {
-    return;
-  }
+  * Implements hook_metatags_alter().
+  */
+ function helper_module_metatags_alter(array &$metatags, array $context) {
+   if (!isset($context['entity'])) {
+     return;
+   }
 
-  $entity = $context['entity'];
+   $entity = $context['entity'];
 
-  // Only process listing content type nodes.
-  if ($entity->getEntityTypeId() !== 'node' || $entity->bundle() !== 'listing') {
-    return;
-  }
+   if ($entity->getEntityTypeId() !== 'node' || $entity->bundle() !== 'listing') {
+     return;
+   }
 
-  // Check if the listing category field exists and has a value.
-  if (!$entity->hasField('field_listing_category') || $entity->get('field_listing_category')->isEmpty()) {
-    return;
-  }
+   if (!$entity->hasField('field_listing_category') || $entity->get('field_listing_category')->isEmpty()) {
+     return;
+   }
 
-  $helper_manager = \Drupal:: service('plugin.manager.helper');
+   $helper_manager = \Drupal::service('plugin.manager.helper');
+   try {
+     $schema_helper = $helper_manager->createInstance('schema_type_mapper');
+     $term_id = (int) $entity->get('field_listing_category')->target_id;
+     $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->load($term_id);
 
-  try {
-    // Load the Schema Type Helper plugin.
-    $schema_helper = $helper_manager->createInstance('schema_type_mapper');
+     if ($term && method_exists($schema_helper, 'getSchemaTypeForTerm')) {
+       $schema_type = $schema_helper->getSchemaTypeForTerm($term);
 
-    // Get the taxonomy term.
-    $term_id = (int) $entity->get('field_listing_category')->target_id;
-    $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->load($term_id);
+       // Update the schema_place_type metatag
+       if ($schema_type !== NULL && isset($metatags['schema_place_type'])) {
+         file_put_contents('/tmp/metatag_alter_debug.txt',
+           date('Y-m-d H:i:s') . " - Changing schema_place_type from " .
+           $metatags['schema_place_type'] . " to " . $schema_type .
+           " for node " . $entity->id() . "\n", FILE_APPEND);
 
-    if ($term && method_exists($schema_helper, 'getSchemaTypeForTerm')) {
-      $schema_type = $schema_helper->getSchemaTypeForTerm($term);
-
-      if ($schema_type !== NULL) {
-        $metatags['schema_place_type'] = $schema_type;
-
-        \Drupal::logger('helper_module')->debug(
-          'Updated schema_place_type to @type for listing @nid (term:  @term_name [tid: @tid])',
-          [
-            '@type' => $schema_type,
-            '@nid' => $entity->id(),
-            '@term_name' => $term->getName(),
-            '@tid' => $term_id,
-          ]
-        );
-      }
-    }
-  }
-  catch (\Exception $e) {
-    \Drupal::logger('helper_module')->error(
-      'Error determining schema type for listing @nid: @message',
-      [
-        '@nid' => $entity->id(),
-        '@message' => $e->getMessage(),
-      ]
-    );
-  }
-}
+         $metatags['schema_place_type'] = $schema_type;
+       }
+     }
+   }
+   catch (\Exception $e) {
+     file_put_contents('/tmp/metatag_alter_debug.txt',
+       "Error: " . $e->getMessage() . "\n", FILE_APPEND);
+   }
+ }

@@ -19,7 +19,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 #[Helper(
   id: 'schema_type_mapper',
-  label: new TranslatableMarkup('Schema. org Type Mapper'),
+  label: new TranslatableMarkup('Schema.org Type Mapper'),
   description: new TranslatableMarkup('Maps listing categories to Schema.org types dynamically'),
   weight: 10,
 )]
@@ -57,7 +57,7 @@ class SchemaTypeHelper extends HelperBase implements ContainerFactoryPluginInter
       $plugin_id,
       $plugin_definition,
       $container->get('entity_type.manager'),
-      $container->get('cache. default'),
+      $container->get('cache.default'),
     );
   }
 
@@ -107,7 +107,7 @@ class SchemaTypeHelper extends HelperBase implements ContainerFactoryPluginInter
   }
 
   /**
-   * Matches a term name to a Schema. org type.
+   * Matches a term name to a Schema.org type.
    *
    * @param string $term_name
    *   The taxonomy term name.
@@ -172,7 +172,7 @@ class SchemaTypeHelper extends HelperBase implements ContainerFactoryPluginInter
   }
 
   /**
-   * Gets all Schema. org LocalBusiness types.
+   * Gets all Schema.org LocalBusiness types.
    *
    * @return array
    *   Array of Schema.org type names.
