@@ -41,6 +41,7 @@ function helper_module_form_alter(&$form, FormStateInterface $form_state, $form_
     }
   }
 }
+
 /**
  * Implements hook_form_views_exposed_form_alter().
  *

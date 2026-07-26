@@ -6,3 +6,15 @@ helper_module.city_autocomplete:
   requirements:
     _permission: 'access content'
     province: \d+
+
+helper_module.province_town_taxonomy:
+    path: '/{province}/{town}/{categories}'
+    defaults:
+      _controller: '\Drupal\helper_module\Controller\ProvinceTownTaxonomyController::render'
+    requirements:
+      _permission: 'access content'
+      province: '[a-z0-9-]+'
+      town: '[a-z0-9-]+'
+      categories: '[a-zA-Z0-9/\-_]+'
+    options:
+      utf8: true
