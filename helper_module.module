@@ -138,3 +138,27 @@ function helper_module_node_presave(Drupal\Core\Entity\EntityInterface $node) {
        "Error: " . $e->getMessage() . "\n", FILE_APPEND);
    }
  }
+
+/**
+  * Implements hook_views_query_alter().
+  *
+  * Blocks the query entirely until a town has been selected, so nothing
+  * shows on an unfilled search form. Category and business name (keys)
+  * are optional narrowing filters on top of that - once a town is picked,
+  * results show for that town, further narrowed by category/keys only if
+  * the visitor also fills those in.
+  */
+ function helper_module_views_query_alter(\Drupal\views\ViewExecutable $view, \Drupal\views\Plugin\views\query\QueryPluginBase $query) {
+   if (!in_array($view->id(), ['listings_search', 'point_of_interest_search'], TRUE)) {
+     return;
+   }
+
+   $town_filter = $view->filter['town'] ?? NULL;
+   $town_value = $town_filter ? $town_filter->value : NULL;
+
+   if (empty($town_value)) {
+     if (method_exists($query, 'abort')) {
+       $query->abort();
+     }
+   }
+ }

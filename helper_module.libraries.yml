@@ -1,7 +1,8 @@
 location-autocomplete:
-  version: 1.x
+  version: 1.1
   js:
     js/location-autocomplete.js: {}
+    js/search-town-autocomplete-scope.js: {}
   dependencies:
     - core/drupal
     - core/drupal.autocomplete
