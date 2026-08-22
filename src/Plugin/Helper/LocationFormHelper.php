@@ -82,18 +82,37 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
           $current_parent = reset($parents)->id();
         }
         else {
+          // Selected term is already a parent (province).
           $current_parent = $current_value;
           $current_value = NULL;
         }
       }
     }
 
-    // Check if province was changed via AJAX - if so, clear city value.
+    // Read selected province from processed values first, then raw input.
     $selected_province = $form_state->getValue('field_canadian_towns_province');
+    if ($selected_province === NULL || $selected_province === '') {
+      $user_input = $form_state->getUserInput();
+      $selected_province = $user_input['field_canadian_towns_province'] ?? NULL;
+    }
+
+    // Normalize empty selection markers.
+    if ($selected_province === '_none' || $selected_province === '') {
+      $selected_province = NULL;
+    }
+
+    // If user interacted with province in this request, trust it and clear stale city.
     if ($selected_province !== NULL) {
-      // Province changed via AJAX, use the new value and clear city.
       $current_parent = $selected_province;
       $current_value = NULL;
+    }
+    else {
+      // Explicitly handle "none selected" to keep city disabled/cleared.
+      $raw_value = $form_state->getValue('field_canadian_towns_province');
+      if ($raw_value === '_none') {
+        $current_parent = NULL;
+        $current_value = NULL;
+      }
     }
 
     // Create inline container for location fields.
@@ -111,7 +130,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       '#title' => $this->t('Province'),
       '#options' => $this->getProvinceOptions(),
       '#empty_option' => $this->t('- Select Province -'),
-      '#default_value' => $current_parent,
+      '#default_value' => $current_parent ?? '_none',
       '#required' => $form['field_canadian_towns']['widget']['#required'] ?? FALSE,
       '#attributes' => [
         'data-drupal-selector' => 'edit-field-canadian-towns-province',
@@ -140,10 +159,10 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       '#suffix' => '</div>',
     ];
 
-    // Only add autocomplete if there's a valid province selected.
+    // Add autocomplete only when a valid province is selected.
     if (!empty($current_parent) && $current_parent !== '_none') {
       $city_field['#autocomplete_route_name'] = 'helper_module.city_autocomplete';
-      $city_field['#autocomplete_route_parameters'] = ['province' => $current_parent];
+      $city_field['#autocomplete_route_parameters'] = ['province' => (int) $current_parent];
     }
 
     $form['location_wrapper']['field_canadian_towns_city'] = $city_field;
@@ -208,6 +227,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
    *   The city field element to replace.
    */
   public function ajaxUpdateCityField(array &$form, FormStateInterface $form_state): array {
+    $form_state->setRebuild(TRUE);
     return $form['location_wrapper']['field_canadian_towns_city'];
   }
 
@@ -244,7 +264,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     if (!empty($city_value)) {
       // Extract term ID from "City Name (123)" format.
       if (preg_match('/\((\d+)\)$/', $city_value, $matches)) {
-        $tid = $matches[1];
+        $tid = (int) $matches[1];
         $form_state->setValue(['field_canadian_towns', 0, 'target_id'], $tid);
       }
     }
@@ -252,45 +272,13 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       // No city selected, use province.
       $province = $form_state->getValue('field_canadian_towns_province');
       if (!empty($province) && $province !== '_none') {
-        $form_state->setValue(['field_canadian_towns', 0, 'target_id'], $province);
+        $form_state->setValue(['field_canadian_towns', 0, 'target_id'], (int) $province);
       }
     }
   }
 
   /**
    * Alters a Views exposed search form to add province scoping to town.
-   *
-   * Leaves Views' own "town" exposed filter element completely intact -
-   * a real entity_autocomplete element with Drupal core's own
-   * #element_validate wired in, same mechanism that makes "category"
-   * work correctly with zero custom code.
-   *
-   * Province scoping swaps in a custom selection handler
-   * (helper_module:province_scoped_term, see
-   * Plugin/EntityReferenceSelection/ProvinceScopedTermSelection.php) that
-   * restricts results to children of a given parent term. A valid
-   * autocomplete URL is pre-computed per province
-   * (getProvinceAutocompleteSettings()) and handed to JS via
-   * drupalSettings.
-   *
-   * The client-side swap lives in js/search-town-province-scope.js, part
-   * of the helper_module/location-autocomplete library (see
-   * helper_module.libraries.yml) - NOT an inline #attached/html_head
-   * script. An earlier version tried html_head and it silently never
-   * rendered on this Views exposed form (confirmed via curl: the
-   * drupalSettings payload came through fine, the html_head script tag
-   * did not) - so this uses the same #attached/library mechanism already
-   * proven to work for alterListingForm() above.
-   *
-   * No #ajax on town_province - Views exposed forms are $_GET forms that
-   * strip form_build_id/form_token from exposed widgets, which breaks
-   * the form-cache round trip element-level #ajax depends on (core issue
-   * #2842525, still open).
-   *
-   * @param array $form
-   *   The views exposed form array.
-   * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The form state.
    */
   public function alterSearchForm(array &$form, FormStateInterface $form_state): void {
     if (!isset($form['town']) || ($form['town']['#type'] ?? NULL) !== 'entity_autocomplete') {
@@ -328,15 +316,22 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       '#attributes' => [
         'id' => 'search-town-province-select',
       ],
+      '#id' => 'edit-town-province',
     ];
 
     $form['town']['#title'] = $this->t('Town');
     $form['town']['#weight'] = ($form['town']['#weight'] ?? -5) + 1;
     $form['town']['#disabled'] = empty($current_parent);
+    $form['town']['#id'] = 'edit-town';
     $form['town']['#attributes']['id'] = 'search-town-field';
     $form['town']['#attributes']['placeholder'] = empty($current_parent)
       ? $this->t('Select a province first')
       : $this->t('Start typing town name...');
+
+    // Cosmetic: hide trailing "(123)" in visible value after reload.
+    if (!empty($form['town']['#value']) && is_string($form['town']['#value'])) {
+      $form['town']['#value'] = preg_replace('/\s*\(\d+\)\s*$/', '', $form['town']['#value']);
+    }
 
     if (!empty($current_parent)) {
       $form['town']['#selection_handler'] = 'helper_module:province_scoped_term';
@@ -344,19 +339,12 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     }
 
     $province_paths = $this->getProvinceAutocompleteSettings();
-
     $form['#attached']['drupalSettings']['helperModule']['townAutocompletePaths'] = $province_paths;
     $form['#attached']['library'][] = 'helper_module/location-autocomplete';
   }
 
   /**
    * Pre-computes a valid entity_autocomplete URL for every province.
-   *
-   * Mirrors the exact key-generation Drupal core uses in
-   * EntityAutocomplete::processEntityAutocomplete() - same serialization
-   * of #selection_settings, same hmacBase64 hash - so the resulting keys
-   * are indistinguishable from ones core itself would generate, and the
-   * autocomplete route accepts them without any core changes.
    *
    * @return string[]
    *   An array of autocomplete URLs keyed by province term ID.

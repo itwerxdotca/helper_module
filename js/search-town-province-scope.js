@@ -1,51 +1,115 @@
 /**
  * @file
- * Province-scoped town autocomplete for the listing/POI search forms.
+ * Province-scoped town autocomplete for exposed search forms.
  *
- * Swaps the "town" entity_autocomplete field's autocomplete endpoint when
- * the paired "town_province" select changes, using pre-computed
- * per-province URLs from drupalSettings.helperModule.townAutocompletePaths
- * (see LocationFormHelper::getProvinceAutocompleteSettings()). No page
- * reload, no Form API #ajax (breaks on Views exposed forms - core issue
- * #2842525). Re-runs Drupal's own autocomplete attachment after enabling
- * the field, since a field with no data-autocomplete-path at page load
- * never gets that behavior attached in the first place.
+ * Swaps the "town" entity_autocomplete endpoint when the paired province
+ * select changes, using precomputed paths from:
+ * drupalSettings.helperModule.townAutocompletePaths.
  */
 (function (Drupal, once) {
   'use strict';
 
-  Drupal.behaviors.searchTownProvinceScope = {
+  Drupal.behaviors.searchTownProvinceCascade = {
 	attach: function (context, settings) {
-	  once('search-town-province-scope', '#search-town-province-select', context).forEach(function (sel) {
-		var townField = context.querySelector
-		  ? context.querySelector('#search-town-field')
-		  : document.getElementById('search-town-field');
+	  const provinceSelects = once(
+		'town-province-cascade',
+		'#search-town-province-select',
+		context
+	  );
 
-		if (!townField) {
+	  provinceSelects.forEach(function (provinceSelect) {
+		const form = provinceSelect.closest('form');
+		if (!form) {
 		  return;
 		}
 
-		var paths = (settings.helperModule && settings.helperModule.townAutocompletePaths) || {};
+		const townInput = form.querySelector('#search-town-field');
+		if (!townInput) {
+		  return;
+		}
 
-		sel.addEventListener('change', function () {
-		  var provinceId = sel.value;
-		  townField.value = '';
+		const paths = (settings.helperModule && settings.helperModule.townAutocompletePaths) || {};
 
-		  if (!provinceId || !paths[provinceId]) {
-			townField.setAttribute('disabled', 'disabled');
-			townField.setAttribute('placeholder', Drupal.t('Select a province first'));
-			townField.removeAttribute('data-autocomplete-path');
-			return;
+		// Remove trailing " (123)" without regex.
+		function stripTidSuffix(value) {
+		  var v = (value || '').trim();
+		  if (!v) {
+			return v;
 		  }
 
-		  townField.removeAttribute('disabled');
-		  townField.setAttribute('placeholder', Drupal.t('Start typing town name...'));
-		  townField.setAttribute('data-autocomplete-path', paths[provinceId]);
+		  var close = v.lastIndexOf(')');
+		  var open = v.lastIndexOf('(');
 
-		  once.remove('autocomplete', townField);
-		  Drupal.attachBehaviors(townField.closest('form'), settings);
+		  if (open === -1 || close !== v.length - 1 || open >= close) {
+			return v;
+		  }
+
+		  var inside = v.substring(open + 1, close).trim();
+		  if (!inside) {
+			return v;
+		  }
+
+		  for (var i = 0; i < inside.length; i++) {
+			var code = inside.charCodeAt(i);
+			if (code < 48 || code > 57) {
+			  return v;
+			}
+		  }
+
+		  return v.substring(0, open).trim();
+		}
+
+		function applyState(clearValue) {
+		  const provinceId = provinceSelect.value;
+		  const path = provinceId ? paths[String(provinceId)] : null;
+
+		  if (path) {
+			townInput.disabled = false;
+			townInput.removeAttribute('disabled');
+			townInput.placeholder = Drupal.t('Start typing town name...');
+			townInput.setAttribute('data-autocomplete-path', path);
+			townInput.classList.add('form-autocomplete');
+
+			if (clearValue) {
+			  townInput.value = '';
+			} else {
+			  townInput.value = stripTidSuffix(townInput.value);
+			}
+		  } else {
+			townInput.disabled = true;
+			townInput.setAttribute('disabled', 'disabled');
+			townInput.placeholder = Drupal.t('Select a province first');
+			townInput.removeAttribute('data-autocomplete-path');
+			townInput.classList.remove('form-autocomplete');
+
+			if (clearValue) {
+			  townInput.value = '';
+			} else {
+			  townInput.value = stripTidSuffix(townInput.value);
+			}
+		  }
+		}
+
+		provinceSelect.addEventListener('change', function () {
+		  // Changing province invalidates previously selected town.
+		  applyState(true);
 		});
+
+		// Cosmetic: hide trailing "(123)" after user interaction.
+		const inputs = once('strip-term-id-visual', '#search-town-field', context);
+		inputs.forEach(function (input) {
+		  input.addEventListener('blur', function () {
+			input.value = stripTidSuffix(input.value);
+		  });
+		  input.addEventListener('change', function () {
+			input.value = stripTidSuffix(input.value);
+		  });
+		});
+
+		// Initial state on load/re-attach.
+		applyState(false);
 	  });
 	}
   };
+
 })(Drupal, once);
