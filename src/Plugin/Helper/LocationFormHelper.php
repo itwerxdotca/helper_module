@@ -51,7 +51,12 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition): static {
+  public static function create(
+    ContainerInterface $container,
+    array $configuration,
+    $plugin_id,
+    $plugin_definition
+  ): static {
     return new static(
       $configuration,
       $plugin_id,
@@ -63,7 +68,10 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
   /**
    * Alters the listing form.
    */
-  public function alterListingForm(array &$form, FormStateInterface $form_state): void {
+  public function alterListingForm(
+    array &$form,
+    FormStateInterface $form_state
+  ): void {
     if (!isset($form['field_canadian_towns'])) {
       return;
     }
@@ -75,9 +83,15 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
 
     if ($entity->id() && !$entity->get('field_canadian_towns')->isEmpty()) {
       $current_value = $entity->get('field_canadian_towns')->target_id;
-      $term = $this->entityTypeManager->getStorage('taxonomy_term')->load($current_value);
+      $term = $this->entityTypeManager
+        ->getStorage('taxonomy_term')
+        ->load($current_value);
+
       if ($term) {
-        $parents = $this->entityTypeManager->getStorage('taxonomy_term')->loadParents($current_value);
+        $parents = $this->entityTypeManager
+          ->getStorage('taxonomy_term')
+          ->loadParents($current_value);
+
         if (!empty($parents)) {
           $current_parent = reset($parents)->id();
         }
@@ -91,6 +105,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
 
     // Read selected province from processed values first, then raw input.
     $selected_province = $form_state->getValue('field_canadian_towns_province');
+
     if ($selected_province === NULL || $selected_province === '') {
       $user_input = $form_state->getUserInput();
       $selected_province = $user_input['field_canadian_towns_province'] ?? NULL;
@@ -109,6 +124,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     else {
       // Explicitly handle "none selected" to keep city disabled/cleared.
       $raw_value = $form_state->getValue('field_canadian_towns_province');
+
       if ($raw_value === '_none') {
         $current_parent = NULL;
         $current_value = NULL;
@@ -147,9 +163,20 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     $city_field = [
       '#type' => 'textfield',
       '#title' => $this->t('City'),
-      '#default_value' => $current_value ? $this->getTermName((int) $current_value) . ' (' . $current_value . ')' : '',
+      '#default_value' => $current_value
+        ? $this->getTermName((int) $current_value) . ' (' . $current_value . ')'
+        : '',
       '#disabled' => empty($current_parent),
-      '#placeholder' => empty($current_parent) ? $this->t('Select a province first') : $this->t('Start typing city name...'),
+      '#placeholder' => empty($current_parent)
+        ? $this->t('Select a province first')
+        : $this->t('Start typing city name...'),
+      '#states' => [
+        'required' => [
+          ':input[name="field_canadian_towns_province"]' => [
+            '!value' => '_none',
+          ],
+        ],
+      ],
       '#attributes' => [
         'data-drupal-selector' => 'edit-field-canadian-towns-city',
         'data-province-id' => $current_parent ?? 0,
@@ -162,7 +189,9 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     // Add autocomplete only when a valid province is selected.
     if (!empty($current_parent) && $current_parent !== '_none') {
       $city_field['#autocomplete_route_name'] = 'helper_module.city_autocomplete';
-      $city_field['#autocomplete_route_parameters'] = ['province' => (int) $current_parent];
+      $city_field['#autocomplete_route_parameters'] = [
+        'province' => (int) $current_parent,
+      ];
     }
 
     $form['location_wrapper']['field_canadian_towns_city'] = $city_field;
@@ -176,7 +205,8 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       $form['location_wrapper']['field_street_address']['#title_display'] = 'invisible';
 
       // Style the address widget wrapper.
-      $form['location_wrapper']['field_street_address']['#attributes']['style'] = 'flex: 1 1 100%; min-width: 100%;';
+      $form['location_wrapper']['field_street_address']['#attributes']['style'] =
+        'flex: 1 1 100%; min-width: 100%;';
 
       // Access the first (and only) delta item.
       if (isset($form['location_wrapper']['field_street_address']['widget'][0])) {
@@ -191,18 +221,25 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
 
         // Access the address element and apply inline styles.
         if (isset($widget['address'])) {
-          $widget['address']['#attributes']['style'] = 'display: flex; gap: 1rem; flex-wrap: wrap;';
+          $widget['address']['#attributes']['style'] =
+            'display: flex; gap: 1rem; flex-wrap: wrap;';
 
-          // Style address_line1 (now visible based on field_overrides).
+          // Style address_line1.
           if (isset($widget['address']['#address_element_properties']['address_line1'])) {
-            $widget['address']['#address_element_properties']['address_line1']['#attributes']['style'] = 'flex: 2; min-width: 300px;';
-            $widget['address']['#address_element_properties']['address_line1']['#attributes']['placeholder'] = $this->t('Street Address');
+            $widget['address']['#address_element_properties']['address_line1']['#attributes']['style'] =
+              'flex: 2; min-width: 300px;';
+
+            $widget['address']['#address_element_properties']['address_line1']['#attributes']['placeholder'] =
+              $this->t('Street Address');
           }
 
-          // Style postal_code (now visible based on field_overrides).
+          // Style postal_code.
           if (isset($widget['address']['#address_element_properties']['postal_code'])) {
-            $widget['address']['#address_element_properties']['postal_code']['#attributes']['style'] = 'flex: 1; min-width: 150px;';
-            $widget['address']['#address_element_properties']['postal_code']['#attributes']['placeholder'] = $this->t('Postal Code');
+            $widget['address']['#address_element_properties']['postal_code']['#attributes']['style'] =
+              'flex: 1; min-width: 150px;';
+
+            $widget['address']['#address_element_properties']['postal_code']['#attributes']['placeholder'] =
+              $this->t('Postal Code');
           }
         }
       }
@@ -217,17 +254,13 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
 
   /**
    * AJAX callback to update city field when province changes.
-   *
-   * @param array $form
-   *   The form array.
-   * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The form state.
-   *
-   * @return array
-   *   The city field element to replace.
    */
-  public function ajaxUpdateCityField(array &$form, FormStateInterface $form_state): array {
+  public function ajaxUpdateCityField(
+    array &$form,
+    FormStateInterface $form_state
+  ): array {
     $form_state->setRebuild(TRUE);
+
     return $form['location_wrapper']['field_canadian_towns_city'];
   }
 
@@ -240,6 +273,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       ->loadTree('canadian_towns', 0, 1, FALSE);
 
     $options = [];
+
     foreach ($parent_terms as $term) {
       $options[$term->tid] = $term->name;
     }
@@ -251,28 +285,42 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
    * Gets term name by ID.
    */
   protected function getTermName(int $tid): string {
-    $term = $this->entityTypeManager->getStorage('taxonomy_term')->load($tid);
+    $term = $this->entityTypeManager
+      ->getStorage('taxonomy_term')
+      ->load($tid);
+
     return $term ? $term->getName() : '';
   }
 
   /**
    * Validation handler to map province/city back to field_canadian_towns.
    */
-  public function validateCanadianTowns(array &$form, FormStateInterface $form_state): void {
+  public function validateCanadianTowns(
+    array &$form,
+    FormStateInterface $form_state
+  ): void {
     $city_value = $form_state->getValue('field_canadian_towns_city');
 
     if (!empty($city_value)) {
       // Extract term ID from "City Name (123)" format.
       if (preg_match('/\((\d+)\)$/', $city_value, $matches)) {
         $tid = (int) $matches[1];
-        $form_state->setValue(['field_canadian_towns', 0, 'target_id'], $tid);
+
+        $form_state->setValue(
+          ['field_canadian_towns', 0, 'target_id'],
+          $tid
+        );
       }
     }
     else {
       // No city selected, use province.
       $province = $form_state->getValue('field_canadian_towns_province');
+
       if (!empty($province) && $province !== '_none') {
-        $form_state->setValue(['field_canadian_towns', 0, 'target_id'], (int) $province);
+        $form_state->setValue(
+          ['field_canadian_towns', 0, 'target_id'],
+          (int) $province
+        );
       }
     }
   }
@@ -280,26 +328,52 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
   /**
    * Alters a Views exposed search form to add province scoping to town.
    */
-  public function alterSearchForm(array &$form, FormStateInterface $form_state): void {
+  public function alterSearchForm(
+    array &$form,
+    FormStateInterface $form_state
+  ): void {
     if (!isset($form['town']) || ($form['town']['#type'] ?? NULL) !== 'entity_autocomplete') {
       return;
     }
 
+    /*
+     * This is specifically the listings_search View's block_1 display.
+     *
+     * The block display has three contextual filters which cause Views
+     * to generate /all/all/all in the form action. The search itself
+     * needs to submit to the dedicated Page display instead.
+     */
+    $view = $form_state->get('view');
+
+    if (
+      $view &&
+      $view->id() === 'listings_search' &&
+      $view->current_display === 'block_1'
+    ) {
+      $form['#action'] = Url::fromUserInput('/listing/search')->toString();
+    }
+
     $selected_province = $form_state->getValue('town_province');
+
     if ($selected_province === NULL || $selected_province === '') {
       $user_input = $form_state->getUserInput();
       $selected_province = $user_input['town_province'] ?? NULL;
     }
 
     $current_parent = NULL;
+
     if (!empty($selected_province) && $selected_province !== '_none') {
       $current_parent = $selected_province;
     }
     elseif (!empty($form['town']['#default_value'])) {
       $existing = $form['town']['#default_value'];
       $existing_term = is_array($existing) ? reset($existing) : $existing;
+
       if ($existing_term instanceof \Drupal\taxonomy\TermInterface) {
-        $parents = $this->entityTypeManager->getStorage('taxonomy_term')->loadParents((int) $existing_term->id());
+        $parents = $this->entityTypeManager
+          ->getStorage('taxonomy_term')
+          ->loadParents((int) $existing_term->id());
+
         if (!empty($parents)) {
           $current_parent = reset($parents)->id();
         }
@@ -310,7 +384,7 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       '#type' => 'select',
       '#title' => $this->t('Province'),
       '#options' => $this->getProvinceOptions(),
-      '#empty_option' => $this->t('- Any Province -'),
+      '#empty_option' => $this->t('- Select Province -'),
       '#default_value' => $current_parent,
       '#weight' => $form['town']['#weight'] ?? -5,
       '#attributes' => [
@@ -330,7 +404,11 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
 
     // Cosmetic: hide trailing "(123)" in visible value after reload.
     if (!empty($form['town']['#value']) && is_string($form['town']['#value'])) {
-      $form['town']['#value'] = preg_replace('/\s*\(\d+\)\s*$/', '', $form['town']['#value']);
+      $form['town']['#value'] = preg_replace(
+        '/\s*\(\d+\)\s*$/',
+        '',
+        $form['town']['#value']
+      );
     }
 
     if (!empty($current_parent)) {
@@ -339,8 +417,12 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     }
 
     $province_paths = $this->getProvinceAutocompleteSettings();
-    $form['#attached']['drupalSettings']['helperModule']['townAutocompletePaths'] = $province_paths;
-    $form['#attached']['library'][] = 'helper_module/location-autocomplete';
+
+    $form['#attached']['drupalSettings']['helperModule']['townAutocompletePaths'] =
+      $province_paths;
+
+    $form['#attached']['library'][] =
+      'helper_module/location-autocomplete';
   }
 
   /**
@@ -360,8 +442,14 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
         'parent_term' => $tid,
       ];
 
-      $data = serialize($selection_settings) . 'taxonomy_term' . $selection_handler;
-      $key = Crypt::hmacBase64($data, Settings::getHashSalt());
+      $data = serialize($selection_settings)
+        . 'taxonomy_term'
+        . $selection_handler;
+
+      $key = Crypt::hmacBase64(
+        $data,
+        Settings::getHashSalt()
+      );
 
       if (!$key_value_storage->has($key)) {
         $key_value_storage->set($key, $selection_settings);
@@ -390,13 +478,16 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     // Add street address.
     if (!$node->get('field_street_address')->isEmpty()) {
       $address_field = $node->get('field_street_address')->first();
+
       if ($address_field) {
         if ($address_field->address_line1) {
           $address_parts[] = $address_field->address_line1;
         }
+
         if ($address_field->address_line2) {
           $address_parts[] = $address_field->address_line2;
         }
+
         if ($address_field->postal_code) {
           $address_parts[] = $address_field->postal_code;
         }
@@ -406,10 +497,15 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
     // Add city/province from canadian_towns.
     if (!$node->get('field_canadian_towns')->isEmpty()) {
       $term = $node->get('field_canadian_towns')->entity;
+
       if ($term) {
         $address_parts[] = $term->getName();
+
         // Get parent (province) if this is a city.
-        $parents = $this->entityTypeManager->getStorage('taxonomy_term')->loadParents($term->id());
+        $parents = $this->entityTypeManager
+          ->getStorage('taxonomy_term')
+          ->loadParents($term->id());
+
         if (!empty($parents)) {
           $province = reset($parents);
           $address_parts[] = $province->getName();
@@ -428,17 +524,26 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
 
     // Check if geolocation module is available.
     if (!\Drupal::hasService('plugin.manager.geolocation.geocoder')) {
-      \Drupal::logger('helper_module')->error('Geolocation geocoder service not available. Make sure Geolocation Geocoder module is enabled.');
+      \Drupal::logger('helper_module')->error(
+        'Geolocation geocoder service not available. Make sure Geolocation Geocoder module is enabled.'
+      );
+
       return;
     }
 
     // Geocode using Geolocation module.
     try {
-      $geocoder_manager = \Drupal::service('plugin.manager.geolocation.geocoder');
+      $geocoder_manager = \Drupal::service(
+        'plugin.manager.geolocation.geocoder'
+      );
+
       $geocoder_definitions = $geocoder_manager->getDefinitions();
 
       if (empty($geocoder_definitions)) {
-        \Drupal::logger('helper_module')->warning('No geocoder plugins available. Configure a geocoder in Geolocation settings.');
+        \Drupal::logger('helper_module')->warning(
+          'No geocoder plugins available. Configure a geocoder in Geolocation settings.'
+        );
+
         return;
       }
 
@@ -447,11 +552,15 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
           $geocoder = $geocoder_manager->createInstance($plugin_id);
           $result = $geocoder->geocode($full_address);
 
-          if (!empty($result['location']['lat']) && !empty($result['location']['lng'])) {
+          if (
+            !empty($result['location']['lat']) &&
+            !empty($result['location']['lng'])
+          ) {
             $node->set('field_street_location', [
               'lat' => $result['location']['lat'],
               'lng' => $result['location']['lng'],
             ]);
+
             return;
           }
         }
@@ -462,16 +571,22 @@ class LocationFormHelper extends HelperBase implements ContainerFactoryPluginInt
       }
 
       // If we get here, no geocoder succeeded.
-      \Drupal::logger('helper_module')->warning('Failed to geocode address for listing @id: @address', [
-        '@id' => $node->id(),
-        '@address' => $full_address,
-      ]);
+      \Drupal::logger('helper_module')->warning(
+        'Failed to geocode address for listing @id: @address',
+        [
+          '@id' => $node->id(),
+          '@address' => $full_address,
+        ]
+      );
     }
     catch (\Exception $e) {
-      \Drupal::logger('helper_module')->error('Geocoding failed for listing @id: @message', [
-        '@id' => $node->id(),
-        '@message' => $e->getMessage(),
-      ]);
+      \Drupal::logger('helper_module')->error(
+        'Geocoding failed for listing @id: @message',
+        [
+          '@id' => $node->id(),
+          '@message' => $e->getMessage(),
+        ]
+      );
     }
   }
 
