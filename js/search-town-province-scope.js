@@ -1,36 +1,33 @@
 /**
  * @file
  * Province-scoped town autocomplete for exposed search forms.
- *
- * Swaps the "town" entity_autocomplete endpoint when the paired province
- * select changes, using precomputed paths from:
- * drupalSettings.helperModule.townAutocompletePaths.
  */
 (function (Drupal, once) {
   'use strict';
 
-  Drupal.behaviors.searchTownProvinceCascade = {
+  Drupal.behaviors.searchTownAutocompleteScope = {
 	attach: function (context, settings) {
-	  const provinceSelects = once(
-		'town-province-cascade',
+	  var provinceSelects = once(
+		'search-town-autocomplete-scope',
 		'#search-town-province-select',
 		context
 	  );
 
 	  provinceSelects.forEach(function (provinceSelect) {
-		const form = provinceSelect.closest('form');
+		var form = provinceSelect.closest('form');
 		if (!form) {
 		  return;
 		}
 
-		const townInput = form.querySelector('#search-town-field');
-		if (!townInput) {
+		var townField = form.querySelector('#search-town-field');
+		if (!townField) {
 		  return;
 		}
 
-		const paths = (settings.helperModule && settings.helperModule.townAutocompletePaths) || {};
+		var paths = (settings.helperModule && settings.helperModule.townAutocompletePaths)
+		  ? settings.helperModule.townAutocompletePaths
+		  : {};
 
-		// Remove trailing " (123)" without regex.
 		function stripTidSuffix(value) {
 		  var v = (value || '').trim();
 		  if (!v) {
@@ -60,56 +57,39 @@
 		}
 
 		function applyState(clearValue) {
-		  const provinceId = provinceSelect.value;
-		  const path = provinceId ? paths[String(provinceId)] : null;
+		  var provinceId = provinceSelect.value;
 
-		  if (path) {
-			townInput.disabled = false;
-			townInput.removeAttribute('disabled');
-			townInput.placeholder = Drupal.t('Start typing town name...');
-			townInput.setAttribute('data-autocomplete-path', path);
-			townInput.classList.add('form-autocomplete');
-
+		  if (!provinceId || !paths[provinceId]) {
+			townField.disabled = true;
+			townField.setAttribute('disabled', 'disabled');
+			townField.setAttribute('placeholder', Drupal.t('Select a province first'));
+			townField.removeAttribute('data-autocomplete-path');
 			if (clearValue) {
-			  townInput.value = '';
+			  townField.value = '';
 			} else {
-			  townInput.value = stripTidSuffix(townInput.value);
+			  townField.value = stripTidSuffix(townField.value);
 			}
+			return;
+		  }
+
+		  townField.disabled = false;
+		  townField.removeAttribute('disabled');
+		  townField.setAttribute('placeholder', Drupal.t('Start typing town name...'));
+		  townField.setAttribute('data-autocomplete-path', paths[provinceId]);
+
+		  if (clearValue) {
+			townField.value = '';
 		  } else {
-			townInput.disabled = true;
-			townInput.setAttribute('disabled', 'disabled');
-			townInput.placeholder = Drupal.t('Select a province first');
-			townInput.removeAttribute('data-autocomplete-path');
-			townInput.classList.remove('form-autocomplete');
-
-			if (clearValue) {
-			  townInput.value = '';
-			} else {
-			  townInput.value = stripTidSuffix(townInput.value);
-			}
+			townField.value = stripTidSuffix(townField.value);
 		  }
 		}
 
 		provinceSelect.addEventListener('change', function () {
-		  // Changing province invalidates previously selected town.
 		  applyState(true);
 		});
 
-		// Cosmetic: hide trailing "(123)" after user interaction.
-		const inputs = once('strip-term-id-visual', '#search-town-field', context);
-		inputs.forEach(function (input) {
-		  input.addEventListener('blur', function () {
-			input.value = stripTidSuffix(input.value);
-		  });
-		  input.addEventListener('change', function () {
-			input.value = stripTidSuffix(input.value);
-		  });
-		});
-
-		// Initial state on load/re-attach.
 		applyState(false);
 	  });
 	}
   };
-
 })(Drupal, once);
