@@ -77,13 +77,38 @@ function helper_module_form_views_exposed_form_alter(&$form, FormStateInterface 
 }
 
 /**
+ * Implements hook_ENTITY_TYPE_presave() for taxonomy_term entities.
+ *
+ * Tag names are saved with single spaces and no spaces at the ends.
+ */
+function helper_module_taxonomy_term_presave(Drupal\Core\Entity\EntityInterface $term) {
+  try {
+    \Drupal::service('plugin.manager.helper')->createInstance('tags')->tidyName($term);
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('helper_module')->error('Error tidying tag name: @message', ['@message' => $e->getMessage()]);
+  }
+}
+
+/**
  * Implements hook_ENTITY_TYPE_presave() for node entities.
+ *
+ * Any content with tags: a tag that differs from an older tag only by
+ * capitals, spacing or a plural ending is swapped for the older tag (see
+ * TagHelper). Listings: geocoded.
  */
 function helper_module_node_presave(Drupal\Core\Entity\EntityInterface $node) {
+  $helper_manager = \Drupal::service('plugin.manager.helper');
+  try {
+    $helper_manager->createInstance('tags')->useExistingTags($node);
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('helper_module')->error('Error checking tags: @message', ['@message' => $e->getMessage()]);
+  }
+
   if ($node->bundle() !== 'listing') {
     return;
   }
-  $helper_manager = \Drupal::service('plugin.manager.helper');
   try {
     $location_helper = $helper_manager->createInstance('location_form');
     if (method_exists($location_helper, 'geocodeListing')) {
@@ -124,18 +149,12 @@ function helper_module_node_presave(Drupal\Core\Entity\EntityInterface $node) {
 
        // Update the schema_place_type metatag
        if ($schema_type !== NULL && isset($metatags['schema_place_type'])) {
-         file_put_contents('/tmp/metatag_alter_debug.txt',
-           date('Y-m-d H:i:s') . " - Changing schema_place_type from " .
-           $metatags['schema_place_type'] . " to " . $schema_type .
-           " for node " . $entity->id() . "\n", FILE_APPEND);
-
          $metatags['schema_place_type'] = $schema_type;
        }
      }
    }
    catch (\Exception $e) {
-     file_put_contents('/tmp/metatag_alter_debug.txt',
-       "Error: " . $e->getMessage() . "\n", FILE_APPEND);
+     \Drupal::logger('helper_module')->error('Error setting the Schema.org place type: @message', ['@message' => $e->getMessage()]);
    }
  }
 
