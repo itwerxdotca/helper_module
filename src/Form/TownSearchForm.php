@@ -50,7 +50,7 @@ class TownSearchForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state): array {
+  public function buildForm(array $form, FormStateInterface $form_state, ?int $fixed_province = NULL): array {
   /** @var \Drupal\helper_module\Plugin\Helper\LocationFormHelper $location */
   $location = $this->helperManager->createInstance('location_form');
 
@@ -61,27 +61,36 @@ class TownSearchForm extends FormBase {
   }
   $province = ($province !== NULL && $province !== '' && ctype_digit((string) $province)) ? (int) $province : NULL;
 
+  // On a province page the block passes that province (TownSearchBlock):
+  // no Province select, and Town is on from the start.
+  if ($fixed_province) {
+    $province = $fixed_province;
+  }
   $form['#attributes']['class'][] = 'town-search-form';
 
-  $form['province'] = [
-    '#type' => 'select',
-    '#title' => $this->t('Province'),
-    '#options' => $location->getProvinceOptions(),
-    '#empty_option' => $this->t('- Select Province -'),
-    '#required' => TRUE,
-    // Explicit IDs so this form never clashes with the search modal's
-    // fields (which use edit-town-province / edit-town).
-    '#id' => 'town-search-province',
-    '#attributes' => [
-    'data-town-province-select' => 'true',
-    // Keep the phone's own select list. The Chosen module restyles every
-    // select that is visible when the page loads; the search modal's
-    // Province escapes that only because the modal is hidden then.
-    // chosen-disable is Chosen's opt-out class.
-    'class' => ['chosen-disable'],
-    ],
-  ];
-
+  if ($fixed_province) {
+    $form['province'] = ['#type' => 'value', '#value' => $fixed_province];
+  }
+  else {
+    $form['province'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Province'),
+      '#options' => $location->getProvinceOptions(),
+      '#empty_option' => $this->t('- Select Province -'),
+      '#required' => TRUE,
+      // Explicit IDs so this form never clashes with the search modal's
+      // fields (which use edit-town-province / edit-town).
+      '#id' => 'town-search-province',
+      '#attributes' => [
+      'data-town-province-select' => 'true',
+      // Keep the phone's own select list. The Chosen module restyles every
+      // select that is visible when the page loads; the search modal's
+      // Province escapes that only because the modal is hidden then.
+      // chosen-disable is Chosen's opt-out class.
+      'class' => ['chosen-disable'],
+      ],
+    ];
+  }
   $selection_settings = ['target_bundles' => ['canadian_towns']];
   if ($province) {
     $selection_settings['parent_term'] = $province;
@@ -89,7 +98,9 @@ class TownSearchForm extends FormBase {
 
   $form['town'] = [
     '#type' => 'entity_autocomplete',
-    '#title' => $this->t('Name of Town'),
+    '#title' => $fixed_province
+      ? $this->t('Find a town in @province', ['@province' => $this->entityTypeManager->getStorage('taxonomy_term')->load($fixed_province)?->label()])
+      : $this->t('Name of Town'),
     '#target_type' => 'taxonomy_term',
     '#selection_handler' => 'helper_module:province_scoped_term',
     '#selection_settings' => $selection_settings,

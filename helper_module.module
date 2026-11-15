@@ -121,42 +121,50 @@ function helper_module_node_presave(Drupal\Core\Entity\EntityInterface $node) {
 }
 
 /**
-  * Implements hook_metatags_alter().
-  */
- function helper_module_metatags_alter(array &$metatags, array $context) {
-   if (!isset($context['entity'])) {
-     return;
-   }
+ * Implements hook_metatags_alter().
+ *
+ * Sets the Schema.org type of a listing or point of interest from its
+ * category (see SchemaTypeHelper).
+ */
+function helper_module_metatags_alter(array &$metatags, array $context) {
+  if (!isset($context['entity'])) {
+    return;
+  }
 
-   $entity = $context['entity'];
+  $entity = $context['entity'];
 
-   if ($entity->getEntityTypeId() !== 'node' || $entity->bundle() !== 'listing') {
-     return;
-   }
+  // Content type => [category field, type when nothing matches].
+  $category_fields = [
+    'listing' => ['field_listing_category', 'LocalBusiness'],
+    'point_of_interest' => ['field_poi_category', 'TouristAttraction'],
+  ];
+  if ($entity->getEntityTypeId() !== 'node' || !isset($category_fields[$entity->bundle()])) {
+    return;
+  }
+  [$field, $default] = $category_fields[$entity->bundle()];
 
-   if (!$entity->hasField('field_listing_category') || $entity->get('field_listing_category')->isEmpty()) {
-     return;
-   }
+  if (!$entity->hasField($field) || $entity->get($field)->isEmpty()) {
+    return;
+  }
 
-   $helper_manager = \Drupal::service('plugin.manager.helper');
-   try {
-     $schema_helper = $helper_manager->createInstance('schema_type_mapper');
-     $term_id = (int) $entity->get('field_listing_category')->target_id;
-     $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->load($term_id);
+  $helper_manager = \Drupal::service('plugin.manager.helper');
+  try {
+    $schema_helper = $helper_manager->createInstance('schema_type_mapper');
+    $term = $entity->get($field)->entity;
 
-     if ($term && method_exists($schema_helper, 'getSchemaTypeForTerm')) {
-       $schema_type = $schema_helper->getSchemaTypeForTerm($term);
+    if ($term instanceof \Drupal\taxonomy\TermInterface && method_exists($schema_helper, 'getSchemaTypeForTerm')) {
+      $schema_type = $schema_helper->getSchemaTypeForTerm($term, $default);
 
-       // Update the schema_place_type metatag
-       if ($schema_type !== NULL && isset($metatags['schema_place_type'])) {
-         $metatags['schema_place_type'] = $schema_type;
-       }
-     }
-   }
-   catch (\Exception $e) {
-     \Drupal::logger('helper_module')->error('Error setting the Schema.org place type: @message', ['@message' => $e->getMessage()]);
-   }
- }
+      // Update the schema_place_type metatag.
+      if ($schema_type !== '' && isset($metatags['schema_place_type'])) {
+        $metatags['schema_place_type'] = $schema_type;
+      }
+    }
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('helper_module')->error('Error setting the Schema.org place type: @message', ['@message' => $e->getMessage()]);
+  }
+}
 
 /**
   * Implements hook_views_query_alter().
@@ -181,3 +189,22 @@ function helper_module_node_presave(Drupal\Core\Entity\EntityInterface $node) {
      }
    }
  }
+
+/**
+ * Implements hook_tokens_alter().
+ *
+ * [node:summary] is the opening of the body as HTML. When Metatag turns it
+ * into plain text for descriptions (including the Schema.org ones), the tags
+ * are removed without spaces, so a heading runs into the next paragraph
+ * ("...Sports Bar & RestaurantLocated in..."). A space after each closing
+ * block tag keeps the words apart; it does not change how the HTML looks.
+ */
+function helper_module_tokens_alter(array &$replacements, array $context, \Drupal\Core\Render\BubbleableMetadata $bubbleable_metadata) {
+  if ($context['type'] !== 'node' || !isset($context['tokens']['summary'])) {
+    return;
+  }
+  $token = $context['tokens']['summary'];
+  if (isset($replacements[$token])) {
+    $replacements[$token] = \Drupal\Core\Render\Markup::create((string) preg_replace('#</(h[1-6]|p|li|div|blockquote|ul|ol)>#i', '$0 ', (string) $replacements[$token]));
+  }
+}
